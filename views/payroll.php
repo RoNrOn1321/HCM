@@ -193,22 +193,20 @@ if ($_POST) {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Period</label>
-                        <select class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5">
-                            <option>March 2024</option>
-                            <option>February 2024</option>
-                            <option>January 2024</option>
+                        <select id="period-selector" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5">
+                            <option value="">Loading periods...</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <div class="flex items-center h-10">
-                            <span class="bg-yellow-100 text-yellow-800 text-sm font-medium mr-2 px-3 py-1 rounded">Processing</span>
+                            <span id="period-status" class="bg-yellow-100 text-yellow-800 text-sm font-medium mr-2 px-3 py-1 rounded">Loading...</span>
                         </div>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Pay Date</label>
                         <div class="flex items-center h-10">
-                            <span class="text-gray-900 font-medium">March 31, 2024</span>
+                            <span id="period-pay-date" class="text-gray-900 font-medium">Loading...</span>
                         </div>
                     </div>
                 </div>
@@ -457,7 +455,7 @@ if ($_POST) {
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeModal('new-period-modal')"></div>
 
             <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <form method="POST" action="">
+                <form id="new-period-form">
                     <div class="bg-white px-6 pt-6 pb-4">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg leading-6 font-medium text-gray-900">Create New Payroll Period</h3>
@@ -469,23 +467,23 @@ if ($_POST) {
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Period Name</label>
-                                <input type="text" name="period_name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" placeholder="April 2024">
+                                <input type="text" id="period-name" name="period_name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" placeholder="April 2024">
                             </div>
 
                             <div class="grid grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                                    <input type="date" name="start_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <input type="date" id="period-start-date" name="start_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                                    <input type="date" name="end_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <input type="date" id="period-end-date" name="end_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Pay Date</label>
-                                <input type="date" name="pay_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                <input type="date" id="period-pay-date" name="pay_date" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
                             </div>
 
                             <div class="flex justify-end pt-4 border-t border-gray-200">
@@ -543,8 +541,12 @@ if ($_POST) {
                 return this.request('summary');
             }
 
-            async getPayrollRecords(limit = 50, offset = 0) {
-                return this.request(`records&limit=${limit}&offset=${offset}`);
+            async getPayrollRecords(periodId = null, limit = 50, offset = 0) {
+                let url = `records&limit=${limit}&offset=${offset}`;
+                if (periodId) {
+                    url += `&period_id=${periodId}`;
+                }
+                return this.request(url);
             }
 
             async getEmployeePayroll(employeeId) {
@@ -604,6 +606,10 @@ if ($_POST) {
 
         // Initialize PayrollAPI instance
         const payrollAPI = new PayrollAPI();
+
+        // Global state for current period
+        let currentPeriod = null;
+        let allPeriods = [];
 
         // DOM manipulation functions
         function showLoading(element) {
@@ -682,7 +688,7 @@ if ($_POST) {
                     // Force refresh all data
                     await Promise.all([
                         refreshPayrollSummary(),
-                        loadPayrollRecords()
+                        loadPayrollRecords(currentPeriod?.id)
                     ]);
                 }
             } catch (error) {
@@ -693,21 +699,158 @@ if ($_POST) {
             }
         }
 
-        async function loadPayrollRecords() {
+        async function loadPayrollRecords(periodId = null) {
             try {
-                console.log('Loading payroll records...');
-                const result = await payrollAPI.getPayrollRecords();
+                console.log('Loading payroll records for period:', periodId || 'all periods');
+                const result = await payrollAPI.getPayrollRecords(periodId);
                 console.log('Payroll records result:', result);
 
                 if (result.success) {
                     updatePayrollTable(result.data);
                     console.log('Table updated with', result.data.length, 'records');
+                    updateRecordsHeader(result.data.length);
                 } else {
                     throw new Error(result.error || 'Failed to load records');
                 }
             } catch (error) {
                 console.error('Failed to load payroll records:', error);
                 showNotification('Failed to load payroll records: ' + error.message, 'error');
+            }
+        }
+
+        async function loadPayrollPeriods() {
+            try {
+                console.log('Loading payroll periods...');
+                const result = await payrollAPI.getPayrollPeriods();
+                console.log('Payroll periods result:', result);
+
+                if (result.success) {
+                    allPeriods = result.data;
+                    updatePeriodSelector();
+
+                    // Set current period to the most recent one
+                    if (allPeriods.length > 0 && !currentPeriod) {
+                        currentPeriod = allPeriods[0];
+                        console.log('Set currentPeriod to:', currentPeriod);
+                        updateCurrentPeriodDisplay();
+                    }
+
+                    // Force check the selector state
+                    const selector = document.getElementById('period-selector');
+                    console.log('Final selector state:', selector?.innerHTML);
+                } else {
+                    throw new Error(result.error || 'Failed to load periods');
+                }
+            } catch (error) {
+                console.error('Failed to load payroll periods:', error);
+                showNotification('Failed to load payroll periods: ' + error.message, 'error');
+            }
+        }
+
+        function updatePeriodSelector() {
+            const selector = document.getElementById('period-selector');
+            if (!selector) return;
+
+            selector.innerHTML = '';
+
+            if (allPeriods.length === 0) {
+                selector.innerHTML = '<option value="">No periods available</option>';
+                return;
+            }
+
+            allPeriods.forEach(period => {
+                const option = document.createElement('option');
+                option.value = period.id;
+                option.textContent = period.name;
+                option.dataset.period = JSON.stringify(period);
+
+                if (currentPeriod && period.id == currentPeriod.id) {
+                    option.selected = true;
+                }
+
+                selector.appendChild(option);
+            });
+        }
+
+        function updateCurrentPeriodDisplay() {
+            if (!currentPeriod) return;
+
+            // Update status badge
+            const statusElement = document.getElementById('period-status');
+            if (statusElement) {
+                statusElement.textContent = currentPeriod.status || 'Processing';
+
+                // Update status badge color
+                statusElement.className = 'text-sm font-medium mr-2 px-3 py-1 rounded ';
+                switch(currentPeriod.status?.toLowerCase()) {
+                    case 'completed':
+                    case 'paid':
+                        statusElement.className += 'bg-green-100 text-green-800';
+                        break;
+                    case 'approved':
+                        statusElement.className += 'bg-blue-100 text-blue-800';
+                        break;
+                    case 'processing':
+                    case 'draft':
+                    default:
+                        statusElement.className += 'bg-yellow-100 text-yellow-800';
+                        break;
+                }
+            }
+
+            // Update pay date
+            const payDateElement = document.getElementById('period-pay-date');
+            if (payDateElement && currentPeriod.pay_date) {
+                const payDate = new Date(currentPeriod.pay_date);
+                payDateElement.textContent = payDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+            }
+
+            // Update records header
+            updateRecordsHeader();
+        }
+
+        function updateRecordsHeader(recordCount = null) {
+            const headerTitle = document.querySelector('.bg-white.rounded-lg h3');
+            if (headerTitle && currentPeriod) {
+                headerTitle.textContent = `Payroll Records - ${currentPeriod.name}`;
+            }
+
+            const headerSubtitle = document.querySelector('.bg-white.rounded-lg p.text-sm');
+            if (headerSubtitle) {
+                if (recordCount !== null) {
+                    headerSubtitle.textContent = `${recordCount} employees processed`;
+                } else {
+                    headerSubtitle.textContent = 'Loading employees...';
+                }
+            }
+        }
+
+        async function handlePeriodChange(event) {
+            const selectedOption = event.target.selectedOptions[0];
+            if (!selectedOption || !selectedOption.dataset.period) return;
+
+            try {
+                currentPeriod = JSON.parse(selectedOption.dataset.period);
+                console.log('Period changed to:', currentPeriod);
+
+                showNotification(`Switched to ${currentPeriod.name}`, 'info');
+
+                // Update period display
+                updateCurrentPeriodDisplay();
+
+                // Reload payroll records for the new period
+                await loadPayrollRecords(currentPeriod.id);
+
+                // Refresh summary for the new period
+                await refreshPayrollSummary();
+
+            } catch (error) {
+                console.error('Error changing period:', error);
+                showNotification('Failed to change period: ' + error.message, 'error');
             }
         }
 
@@ -799,7 +942,7 @@ if ($_POST) {
                 const result = await payrollAPI.approvePayroll(1, employeeId);
                 if (result.success) {
                     showNotification(result.message, 'success');
-                    await loadPayrollRecords();
+                    await loadPayrollRecords(currentPeriod?.id);
                 }
             } catch (error) {
                 showNotification('Failed to approve payroll: ' + error.message, 'error');
@@ -1036,7 +1179,7 @@ if ($_POST) {
                     setTimeout(async () => {
                         await Promise.all([
                             refreshPayrollSummary(),
-                            loadPayrollRecords()
+                            loadPayrollRecords(currentPeriod?.id)
                         ]);
                     }, 500);
                 } else {
@@ -1064,7 +1207,7 @@ if ($_POST) {
 
                     // Update the record status to show it was emailed
                     await payrollAPI.updatePayrollStatus(employeeId, 'Emailed');
-                    await loadPayrollRecords();
+                    await loadPayrollRecords(currentPeriod?.id);
                 } else {
                     throw new Error('Employee not found');
                 }
@@ -1087,7 +1230,7 @@ if ($_POST) {
                             // Refresh both summary and records
                             await Promise.all([
                                 refreshPayrollSummary(),
-                                loadPayrollRecords()
+                                loadPayrollRecords(currentPeriod?.id)
                             ]);
                         }
                     } catch (error) {
@@ -1149,7 +1292,7 @@ if ($_POST) {
                 if (result.success) {
                     showNotification(`Payroll rejected for employee ${employeeId}. Reason: ${reason}`, 'success');
                     closeModal('rejection-modal');
-                    await loadPayrollRecords();
+                    await loadPayrollRecords(currentPeriod?.id);
                 } else {
                     throw new Error(result.error || 'Failed to reject payroll');
                 }
@@ -1171,7 +1314,7 @@ if ($_POST) {
                         // Refresh both summary and records
                         await Promise.all([
                             refreshPayrollSummary(),
-                            loadPayrollRecords()
+                            loadPayrollRecords(currentPeriod?.id)
                         ]);
                     } catch (error) {
                         showNotification('Failed to mark as paid: ' + error.message, 'error');
@@ -1214,6 +1357,8 @@ if ($_POST) {
         // Form submission handler for new payroll period
         async function handleNewPeriodForm(event) {
             event.preventDefault();
+            console.log('New period form submitted');
+
             const formData = new FormData(event.target);
             const periodData = {
                 period_name: formData.get('period_name'),
@@ -1222,15 +1367,84 @@ if ($_POST) {
                 pay_date: formData.get('pay_date')
             };
 
+            console.log('Period data:', periodData);
+
+            // Validate form data
+            if (!periodData.period_name || !periodData.start_date || !periodData.end_date || !periodData.pay_date) {
+                showNotification('Please fill in all required fields', 'error');
+                return;
+            }
+
+            // Validate date logic
+            const startDate = new Date(periodData.start_date);
+            const endDate = new Date(periodData.end_date);
+            const payDate = new Date(periodData.pay_date);
+
+            if (endDate <= startDate) {
+                showNotification('End date must be after start date', 'error');
+                return;
+            }
+
+            if (payDate <= endDate) {
+                showNotification('Pay date should be after the end date', 'error');
+                return;
+            }
+
+            // Disable submit button during processing
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            showLoading(submitButton);
+
             try {
+                showNotification('Creating payroll period...', 'info');
                 const result = await payrollAPI.createPayrollPeriod(periodData);
+
+                console.log('Create period result:', result);
+
                 if (result.success) {
                     showNotification(result.message, 'success');
                     closeModal('new-period-modal');
                     event.target.reset();
+
+                    // Refresh period selector if it exists
+                    addNewPeriodToSelector(result.data);
+                } else {
+                    throw new Error(result.error || 'Failed to create period');
                 }
             } catch (error) {
+                console.error('Create period error:', error);
                 showNotification('Failed to create period: ' + error.message, 'error');
+            } finally {
+                hideLoading(submitButton, originalText);
+            }
+        }
+
+        function addNewPeriodToSelector(newPeriod) {
+            // Add the new period to the allPeriods array
+            if (newPeriod) {
+                allPeriods.unshift(newPeriod); // Add to beginning of array
+                currentPeriod = newPeriod; // Set as current period
+            }
+
+            // Update the main period selector
+            const periodSelector = document.getElementById('period-selector');
+            if (periodSelector && newPeriod) {
+                const option = document.createElement('option');
+                option.value = newPeriod.id;
+                option.textContent = newPeriod.name;
+                option.dataset.period = JSON.stringify(newPeriod);
+                option.selected = true;
+
+                periodSelector.insertBefore(option, periodSelector.firstChild);
+
+                // Update current period display
+                updateCurrentPeriodDisplay();
+
+                // Reload data for the new period
+                setTimeout(() => {
+                    loadPayrollRecords(currentPeriod?.id);
+                    refreshPayrollSummary();
+                }, 100);
             }
         }
 
@@ -1293,7 +1507,7 @@ if ($_POST) {
                 showNotification('Refreshing all data...', 'info');
                 await Promise.all([
                     refreshPayrollSummary(),
-                    loadPayrollRecords()
+                    loadPayrollRecords(currentPeriod?.id)
                 ]);
                 showNotification('Data refreshed successfully', 'success');
             } catch (error) {
@@ -1354,7 +1568,7 @@ if ($_POST) {
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Add event listener for new period form
-            const newPeriodForm = document.querySelector('#new-period-modal form');
+            const newPeriodForm = document.getElementById('new-period-form');
             if (newPeriodForm) {
                 newPeriodForm.addEventListener('submit', handleNewPeriodForm);
             }
@@ -1377,6 +1591,12 @@ if ($_POST) {
                 confirmationBtn.addEventListener('click', handleConfirmation);
             }
 
+            // Add event listener for period selector
+            const periodSelector = document.getElementById('period-selector');
+            if (periodSelector) {
+                periodSelector.addEventListener('change', handlePeriodChange);
+            }
+
             // Override process payroll button
             const processButton = document.querySelector('button[type="submit"][name="action"]');
             if (processButton) {
@@ -1387,14 +1607,29 @@ if ($_POST) {
             }
 
             // Load initial data
-            refreshPayrollSummary();
-            loadPayrollRecords();
+            initializePayrollPage();
 
             // Add auto-refresh every 30 seconds
             setInterval(() => {
                 refreshPayrollSummary();
             }, 30000);
         });
+
+        async function initializePayrollPage() {
+            try {
+                // Load periods first
+                await loadPayrollPeriods();
+
+                // Then load data for the current period
+                await Promise.all([
+                    refreshPayrollSummary(),
+                    loadPayrollRecords(currentPeriod?.id)
+                ]);
+            } catch (error) {
+                console.error('Failed to initialize payroll page:', error);
+                showNotification('Failed to initialize payroll page', 'error');
+            }
+        }
     </script>
 </body>
 </html>

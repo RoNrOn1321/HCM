@@ -167,8 +167,20 @@ function getPayrollRecords() {
         $pdo = getDbConnection();
         $limit = $_GET['limit'] ?? 50;
         $offset = $_GET['offset'] ?? 0;
+        $periodId = $_GET['period_id'] ?? null;
 
-        // First try the simple query without payroll_status table
+        // Ensure limit and offset are integers
+        $limit = (int)$limit;
+        $offset = (int)$offset;
+
+        // Build the WHERE clause (keep simple - period filtering is in JOIN)
+        $whereClause = "e.employment_status = 'Active'";
+        $params = [':limit' => $limit, ':offset' => $offset];
+
+        if ($periodId) {
+            $params[':period_id'] = (int)$periodId;
+        }
+
         $stmt = $pdo->prepare("
             SELECT
                 e.id,
@@ -176,26 +188,35 @@ function getPayrollRecords() {
                 CONCAT(e.first_name, ' ', IFNULL(e.middle_name, ''), ' ', e.last_name) as name,
                 e.first_name,
                 e.last_name,
-                COALESCE(ec.basic_salary, 0) as basic_salary,
-                (ec.basic_salary * 0.10) as allowances,
-                (ec.basic_salary * 0.05) as overtime,
-                (ec.basic_salary + (ec.basic_salary * 0.10) + (ec.basic_salary * 0.05)) as gross_pay,
-                (ec.basic_salary * 0.15) as deductions,
-                ((ec.basic_salary + (ec.basic_salary * 0.10) + (ec.basic_salary * 0.05)) * 0.85) as net_pay,
-                'Pending' as status,
+                COALESCE(pr.basic_salary, ec.basic_salary, 0) as basic_salary,
+                COALESCE(pr.overtime_pay, ec.basic_salary * 0.10, 0) as allowances,
+                COALESCE(pr.overtime_pay, ec.basic_salary * 0.05, 0) as overtime,
+                COALESCE(pr.gross_pay, ec.basic_salary + (ec.basic_salary * 0.15), 0) as gross_pay,
+                COALESCE(pr.total_deductions, ec.basic_salary * 0.15, 0) as deductions,
+                COALESCE(pr.net_pay, (ec.basic_salary + (ec.basic_salary * 0.15)) * 0.85, 0) as net_pay,
+                COALESCE(pr.status, 'Pending') as status,
                 d.dept_name as department,
-                p.position_title
+                p.position_title,
+                pr.payroll_period_id,
+                pr.days_worked,
+                pr.overtime_hours,
+                pr.late_hours,
+                pr.absent_days
             FROM employees e
             LEFT JOIN employee_compensation ec ON e.id = ec.employee_id AND ec.is_active = 1
+            LEFT JOIN payroll_records pr ON e.id = pr.employee_id" . ($periodId ? " AND pr.payroll_period_id = :period_id" : "") . "
             LEFT JOIN departments d ON e.department_id = d.id
             LEFT JOIN positions p ON e.position_id = p.id
-            WHERE e.employment_status = 'Active'
+            WHERE " . $whereClause . "
             ORDER BY e.last_name, e.first_name
             LIMIT :limit OFFSET :offset
         ");
 
-        $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        if ($periodId) {
+            $stmt->bindValue(':period_id', (int)$periodId, PDO::PARAM_INT);
+        }
         $stmt->execute();
 
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -297,44 +318,52 @@ function getEmployeePayroll($employeeId) {
 }
 
 function getPayrollPeriods() {
-    // Mock payroll periods - in real app this would come from database
-    $periods = [
-        [
-            'id' => 1,
-            'name' => 'March 2024',
-            'start_date' => '2024-03-01',
-            'end_date' => '2024-03-31',
-            'pay_date' => '2024-04-05',
-            'status' => 'Processing',
-            'employee_count' => 248,
-            'total_amount' => 9700000
-        ],
-        [
-            'id' => 2,
-            'name' => 'February 2024',
-            'start_date' => '2024-02-01',
-            'end_date' => '2024-02-29',
-            'pay_date' => '2024-03-05',
-            'status' => 'Completed',
-            'employee_count' => 245,
-            'total_amount' => 9450000
-        ],
-        [
-            'id' => 3,
-            'name' => 'January 2024',
-            'start_date' => '2024-01-01',
-            'end_date' => '2024-01-31',
-            'pay_date' => '2024-02-05',
-            'status' => 'Completed',
-            'employee_count' => 240,
-            'total_amount' => 9200000
-        ]
-    ];
+    try {
+        $pdo = getDbConnection();
 
-    echo json_encode([
-        'success' => true,
-        'data' => $periods
-    ]);
+        $stmt = $pdo->prepare("
+            SELECT
+                id,
+                period_code,
+                period_name as name,
+                start_date,
+                end_date,
+                pay_date,
+                status,
+                total_gross,
+                total_deductions,
+                total_net,
+                created_at,
+                updated_at
+            FROM payroll_periods
+            ORDER BY created_at DESC
+            LIMIT 20
+        ");
+
+        $stmt->execute();
+        $periods = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Get employee count for each period (if needed, this is optional for performance)
+        foreach ($periods as &$period) {
+            $period['employee_count'] = 248; // Default for now, could be calculated from actual records
+            $period['total_amount'] = $period['total_net'] ?: 0;
+
+            // Format status for display
+            if ($period['status'] === 'Draft') {
+                $period['status'] = 'Processing';
+            } elseif ($period['status'] === 'Paid') {
+                $period['status'] = 'Completed';
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => $periods
+        ]);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    }
 }
 
 function getAllPayrollData() {
@@ -415,23 +444,69 @@ function createPayrollPeriod($input) {
             }
         }
 
-        // Simulate creating new period
-        $newPeriod = [
-            'id' => rand(100, 999),
-            'name' => $input['period_name'],
-            'start_date' => $input['start_date'],
-            'end_date' => $input['end_date'],
-            'pay_date' => $input['pay_date'],
-            'status' => 'Draft',
-            'employee_count' => 0,
-            'total_amount' => 0,
-            'created_at' => date('Y-m-d H:i:s')
-        ];
+        $pdo = getDbConnection();
+
+        // Generate unique period code
+        $periodCode = 'PAY-' . strtoupper(date('Y-m', strtotime($input['start_date']))) . '-' . sprintf('%03d', rand(1, 999));
+
+        // Check if period code already exists, regenerate if needed
+        $codeCheck = $pdo->prepare("SELECT id FROM payroll_periods WHERE period_code = :period_code");
+        do {
+            $codeCheck->bindParam(':period_code', $periodCode);
+            $codeCheck->execute();
+            if ($codeCheck->rowCount() > 0) {
+                $periodCode = 'PAY-' . strtoupper(date('Y-m', strtotime($input['start_date']))) . '-' . sprintf('%03d', rand(1, 999));
+            }
+        } while ($codeCheck->rowCount() > 0);
+
+        // Validate dates
+        $startDate = new DateTime($input['start_date']);
+        $endDate = new DateTime($input['end_date']);
+        $payDate = new DateTime($input['pay_date']);
+
+        if ($endDate <= $startDate) {
+            http_response_code(400);
+            echo json_encode(['error' => 'End date must be after start date']);
+            return;
+        }
+
+        // Insert new payroll period
+        $stmt = $pdo->prepare("
+            INSERT INTO payroll_periods
+            (period_code, period_name, start_date, end_date, pay_date, status, created_at, updated_at)
+            VALUES (:period_code, :period_name, :start_date, :end_date, :pay_date, 'Draft', NOW(), NOW())
+        ");
+
+        $stmt->bindParam(':period_code', $periodCode);
+        $stmt->bindParam(':period_name', $input['period_name']);
+        $stmt->bindParam(':start_date', $input['start_date']);
+        $stmt->bindParam(':end_date', $input['end_date']);
+        $stmt->bindParam(':pay_date', $input['pay_date']);
+
+        $stmt->execute();
+        $newPeriodId = $pdo->lastInsertId();
+
+        // Get the created period
+        $getStmt = $pdo->prepare("SELECT * FROM payroll_periods WHERE id = :id");
+        $getStmt->bindParam(':id', $newPeriodId);
+        $getStmt->execute();
+        $createdPeriod = $getStmt->fetch(PDO::FETCH_ASSOC);
 
         echo json_encode([
             'success' => true,
             'message' => 'Payroll period created successfully',
-            'data' => $newPeriod
+            'data' => [
+                'id' => (int)$createdPeriod['id'],
+                'period_code' => $createdPeriod['period_code'],
+                'name' => $createdPeriod['period_name'],
+                'start_date' => $createdPeriod['start_date'],
+                'end_date' => $createdPeriod['end_date'],
+                'pay_date' => $createdPeriod['pay_date'],
+                'status' => $createdPeriod['status'],
+                'employee_count' => 0,
+                'total_amount' => 0,
+                'created_at' => $createdPeriod['created_at']
+            ]
         ]);
     } catch (Exception $e) {
         http_response_code(500);
