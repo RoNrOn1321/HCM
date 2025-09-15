@@ -1,55 +1,59 @@
 <?php
 // reports.php - API endpoint for reports and analytics
 
-require_once '../config/database.php';
-require_once '../config/auth.php';
-require_once '../includes/ApiResponse.php';
-require_once '../includes/auth_helper.php';
+session_start();
+require_once __DIR__ . '/../config/database.php';
 
-// Enable CORS
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
+// Set JSON response header
+header('Content-Type: application/json');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
+// Handle CORS
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+    exit(0);
+}
+
+// Check authentication
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Unauthorized - Please login first',
+        'code' => 'AUTH_REQUIRED'
+    ]);
     exit();
 }
 
-// Set content type
-header('Content-Type: application/json');
-
-// Require authentication
-$auth = requireApiAuth();
-if (!$auth['success']) {
-    echo ApiResponse::error($auth['message'], 401);
-    exit;
-}
-
-$user = $auth['user'];
+$user_id = $_SESSION['user_id'];
 $method = $_SERVER['REQUEST_METHOD'];
-$path = $_SERVER['REQUEST_URI'];
-$path_parts = explode('/', trim($path, '/'));
 
 try {
-    $db = new Database();
-    $conn = $db->getConnection();
-
     switch ($method) {
         case 'GET':
-            handleGet($conn, $user);
+            handleGet($pdo, $user_id);
             break;
         case 'POST':
-            handlePost($conn, $user);
+            handlePost($pdo, $user_id);
             break;
         default:
-            echo ApiResponse::error('Method not allowed', 405);
+            http_response_code(405);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Method not allowed'
+            ]);
     }
 } catch (Exception $e) {
-    echo ApiResponse::error('Internal server error: ' . $e->getMessage(), 500);
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Internal server error: ' . $e->getMessage()
+    ]);
 }
 
-function handleGet($conn, $user) {
+function handleGet($pdo, $user_id) {
     // Get query parameters
     $type = $_GET['type'] ?? '';
     $from_date = $_GET['from_date'] ?? '';
@@ -59,42 +63,50 @@ function handleGet($conn, $user) {
 
     switch ($type) {
         case 'dashboard_metrics':
-            getDashboardMetrics($conn, $user);
+            getDashboardMetrics($pdo, $user_id);
             break;
         case 'employee':
-            getEmployeeReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getEmployeeReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'attendance':
-            getAttendanceReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getAttendanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'payroll':
-            getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getPayrollReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'leave':
-            getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getLeaveReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'department':
-            getDepartmentReport($conn, $user, $from_date, $to_date, $format);
+            getDepartmentReport($pdo, $user_id, $from_date, $to_date, $format);
             break;
         case 'performance':
-            getPerformanceReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getPerformanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'benefits':
-            getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $format);
+            getBenefitsReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
             break;
         case 'charts':
-            getChartsData($conn, $user);
+            getChartsData($pdo, $user_id);
             break;
         default:
-            echo ApiResponse::error('Invalid report type', 400);
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Invalid report type'
+            ]);
     }
 }
 
-function handlePost($conn, $user) {
+function handlePost($pdo, $user_id) {
     $input = json_decode(file_get_contents('php://input'), true);
 
     if (!$input) {
-        echo ApiResponse::error('Invalid JSON data', 400);
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Invalid JSON data'
+        ]);
         return;
     }
 
@@ -102,25 +114,29 @@ function handlePost($conn, $user) {
 
     switch ($action) {
         case 'generate_custom_report':
-            generateCustomReport($conn, $user, $input);
+            generateCustomReport($pdo, $user_id, $input);
             break;
         case 'export_report':
-            exportReport($conn, $user, $input);
+            exportReport($pdo, $user_id, $input);
             break;
         default:
-            echo ApiResponse::error('Invalid action', 400);
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Invalid action'
+            ]);
     }
 }
 
-function getDashboardMetrics($conn, $user) {
+function getDashboardMetrics($pdo, $user_id) {
     try {
         // Get total employees
-        $stmt = $conn->prepare("SELECT COUNT(*) as total_employees FROM employees WHERE employment_status = 'Active'");
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total_employees FROM employees WHERE employment_status = 'Active'");
         $stmt->execute();
         $total_employees = $stmt->fetch(PDO::FETCH_ASSOC)['total_employees'];
 
         // Get total departments
-        $stmt = $conn->prepare("SELECT COUNT(*) as total_departments FROM departments");
+        $stmt = $pdo->prepare("SELECT COUNT(*) as total_departments FROM departments");
         $stmt->execute();
         $total_departments = $stmt->fetch(PDO::FETCH_ASSOC)['total_departments'];
 
@@ -128,7 +144,7 @@ function getDashboardMetrics($conn, $user) {
         $avg_attendance = 94.2;
 
         // Get total payroll
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT SUM(ec.basic_salary) as total_salary
             FROM employee_compensation ec
             JOIN employees e ON ec.employee_id = e.id
@@ -145,13 +161,22 @@ function getDashboardMetrics($conn, $user) {
             'total_payroll' => $total_payroll
         ];
 
-        echo ApiResponse::success('Dashboard metrics retrieved successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Dashboard metrics retrieved successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error retrieving dashboard metrics: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error retrieving dashboard metrics: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getEmployeeReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getEmployeeReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
         $where_clause = "WHERE e.employment_status = 'Active'";
         $params = [];
@@ -171,7 +196,7 @@ function getEmployeeReport($conn, $user, $from_date, $to_date, $department_id, $
             $params[':to_date'] = $to_date;
         }
 
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 e.id,
                 e.employee_id,
@@ -211,49 +236,145 @@ function getEmployeeReport($conn, $user, $from_date, $to_date, $department_id, $
             'employees' => $employees
         ];
 
-        echo ApiResponse::success('Employee report generated successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Employee report generated successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating employee report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating employee report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getAttendanceReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getAttendanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
-        // Mock attendance data - in real implementation, this would query attendance_records table
+        $where_clause = "WHERE 1=1";
+        $params = [];
+
+        if ($from_date && $to_date) {
+            $where_clause .= " AND ar.attendance_date BETWEEN :from_date AND :to_date";
+            $params[':from_date'] = $from_date;
+            $params[':to_date'] = $to_date;
+        } else {
+            // Default to last 30 days if no date range specified
+            $where_clause .= " AND ar.attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)";
+        }
+
+        if ($department_id) {
+            $where_clause .= " AND e.department_id = :department_id";
+            $params[':department_id'] = $department_id;
+        }
+
+        // Get summary statistics
+        $stmt = $pdo->prepare("
+            SELECT
+                COUNT(DISTINCT e.id) as total_employees,
+                COUNT(ar.id) as total_records,
+                COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) as present_days,
+                COUNT(CASE WHEN ar.status = 'Absent' THEN 1 END) as absent_days,
+                (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(ar.id)) as avg_attendance_rate
+            FROM employees e
+            LEFT JOIN attendance_records ar ON e.id = ar.employee_id
+            $where_clause
+        ");
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Get monthly trends
+        $monthly_where = str_replace("WHERE 1=1", "WHERE ar.attendance_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)", $where_clause);
+        if ($department_id) {
+            $monthly_where .= " AND e.department_id = :department_id";
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT
+                DATE_FORMAT(ar.attendance_date, '%b') as month,
+                (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(ar.id)) as attendance_rate
+            FROM attendance_records ar
+            JOIN employees e ON ar.employee_id = e.id
+            $monthly_where
+            GROUP BY YEAR(ar.attendance_date), MONTH(ar.attendance_date), DATE_FORMAT(ar.attendance_date, '%b')
+            ORDER BY ar.attendance_date
+        ");
+
+        if ($department_id) {
+            $stmt->bindValue(':department_id', $department_id);
+        }
+
+        $stmt->execute();
+        $monthly_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $monthly_trends = [];
+        foreach ($monthly_results as $result) {
+            $monthly_trends[$result['month']] = round($result['attendance_rate'], 1);
+        }
+
+        // Get department breakdown
+        $stmt = $pdo->prepare("
+            SELECT
+                d.dept_name,
+                (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(ar.id)) as attendance_rate
+            FROM departments d
+            LEFT JOIN employees e ON d.id = e.department_id
+            LEFT JOIN attendance_records ar ON e.id = ar.employee_id
+            WHERE ar.attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+            GROUP BY d.id, d.dept_name
+            ORDER BY attendance_rate DESC
+        ");
+
+        $stmt->execute();
+        $dept_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $department_breakdown = [];
+        foreach ($dept_results as $result) {
+            $department_breakdown[$result['dept_name']] = round($result['attendance_rate'], 1);
+        }
+
         $attendance_data = [
             'report_type' => 'attendance',
             'generated_at' => date('Y-m-d H:i:s'),
+            'filters' => [
+                'from_date' => $from_date,
+                'to_date' => $to_date,
+                'department_id' => $department_id
+            ],
             'summary' => [
-                'total_employees' => 248,
-                'avg_attendance_rate' => 94.2,
-                'total_working_days' => 22,
-                'total_present_days' => 5135,
-                'total_absent_days' => 321
+                'total_employees' => (int)$summary['total_employees'],
+                'avg_attendance_rate' => round($summary['avg_attendance_rate'], 1),
+                'total_working_days' => (int)$summary['total_records'],
+                'total_present_days' => (int)$summary['present_days'],
+                'total_absent_days' => (int)$summary['absent_days']
             ],
-            'monthly_trends' => [
-                'Jan' => 95.2, 'Feb' => 94.8, 'Mar' => 96.1, 'Apr' => 93.7,
-                'May' => 94.5, 'Jun' => 95.8, 'Jul' => 92.3, 'Aug' => 94.1,
-                'Sep' => 96.4, 'Oct' => 95.7, 'Nov' => 94.9, 'Dec' => 95.3
-            ],
-            'department_breakdown' => [
-                'IT Department' => 96.5,
-                'Finance' => 98.1,
-                'HR' => 95.3,
-                'Marketing' => 92.8,
-                'Operations' => 93.7,
-                'Sales' => 91.4,
-                'Legal' => 97.2,
-                'Admin' => 94.8
-            ]
+            'monthly_trends' => $monthly_trends,
+            'department_breakdown' => $department_breakdown
         ];
 
-        echo ApiResponse::success('Attendance report generated successfully', $attendance_data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Attendance report generated successfully',
+            'data' => $attendance_data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating attendance report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating attendance report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getPayrollReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
         $where_clause = "WHERE e.employment_status = 'Active'";
         $params = [];
@@ -264,7 +385,7 @@ function getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $f
         }
 
         // Get payroll summary
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 COUNT(e.id) as total_employees,
                 SUM(ec.basic_salary) as total_basic_salary,
@@ -284,7 +405,7 @@ function getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $f
         $summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
         // Get department breakdown
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 d.dept_name as department,
                 COUNT(e.id) as employee_count,
@@ -318,13 +439,22 @@ function getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $f
             ]
         ];
 
-        echo ApiResponse::success('Payroll report generated successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Payroll report generated successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating payroll report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating payroll report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getLeaveReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
         $where_clause = "";
         $params = [];
@@ -342,17 +472,17 @@ function getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $for
         }
 
         // Get leave statistics
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
-                lt.type_name as leave_type,
+                lt.leave_name as leave_type,
                 COUNT(el.id) as total_requests,
-                SUM(el.days_requested) as total_days,
-                AVG(el.days_requested) as avg_days_per_request
+                SUM(el.total_days) as total_days,
+                AVG(el.total_days) as avg_days_per_request
             FROM employee_leaves el
             LEFT JOIN leave_types lt ON el.leave_type_id = lt.id
             LEFT JOIN employees e ON el.employee_id = e.id
             $where_clause
-            GROUP BY el.leave_type_id, lt.type_name
+            GROUP BY el.leave_type_id, lt.leave_name
             ORDER BY total_requests DESC
         ");
 
@@ -364,7 +494,7 @@ function getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $for
         $leave_stats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get status breakdown
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 el.status,
                 COUNT(el.id) as count
@@ -393,19 +523,28 @@ function getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $for
             'status_breakdown' => $status_breakdown
         ];
 
-        echo ApiResponse::success('Leave report generated successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Leave report generated successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating leave report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating leave report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getDepartmentReport($conn, $user, $from_date, $to_date, $format) {
+function getDepartmentReport($pdo, $user_id, $from_date, $to_date, $format) {
     try {
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 d.id,
                 d.dept_name as department,
-                d.description,
+                d.dept_code,
                 COUNT(e.id) as employee_count,
                 AVG(ec.basic_salary) as avg_salary,
                 SUM(ec.basic_salary) as total_salary,
@@ -414,16 +553,29 @@ function getDepartmentReport($conn, $user, $from_date, $to_date, $format) {
             FROM departments d
             LEFT JOIN employees e ON d.id = e.department_id AND e.employment_status = 'Active'
             LEFT JOIN employee_compensation ec ON e.id = ec.employee_id AND ec.is_active = 1
-            GROUP BY d.id, d.dept_name, d.description
+            GROUP BY d.id, d.dept_name, d.dept_code
             ORDER BY employee_count DESC
         ");
 
         $stmt->execute();
         $departments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Add mock attendance rates
+        // Add real attendance rates
         foreach ($departments as &$dept) {
-            $dept['attendance_rate'] = rand(90, 98) + (rand(0, 9) / 10); // Mock between 90-98%
+            // Get real attendance rate for this department
+            $stmt_att = $pdo->prepare("
+                SELECT
+                    (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(ar.id)) as attendance_rate
+                FROM employees e
+                LEFT JOIN attendance_records ar ON e.id = ar.employee_id
+                WHERE e.department_id = :dept_id
+                AND ar.attendance_date IS NOT NULL
+            ");
+            $stmt_att->bindParam(':dept_id', $dept['id']);
+            $stmt_att->execute();
+            $attendance_result = $stmt_att->fetch(PDO::FETCH_ASSOC);
+
+            $dept['attendance_rate'] = round($attendance_result['attendance_rate'] ?? 0, 1);
             $dept['performance_rating'] = $dept['attendance_rate'] >= 95 ? 'Excellent' :
                                         ($dept['attendance_rate'] >= 90 ? 'Good' : 'Needs Improvement');
         }
@@ -435,50 +587,145 @@ function getDepartmentReport($conn, $user, $from_date, $to_date, $format) {
             'departments' => $departments
         ];
 
-        echo ApiResponse::success('Department report generated successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Department report generated successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating department report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating department report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getPerformanceReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getPerformanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
-        // Mock performance data - in real implementation, this would query performance evaluation tables
+        $where_clause = "WHERE pe.status = 'Completed'";
+        $params = [];
+
+        if ($from_date && $to_date) {
+            $where_clause .= " AND pe.evaluation_period_start >= :from_date AND pe.evaluation_period_end <= :to_date";
+            $params[':from_date'] = $from_date;
+            $params[':to_date'] = $to_date;
+        }
+
+        if ($department_id) {
+            $where_clause .= " AND e.department_id = :department_id";
+            $params[':department_id'] = $department_id;
+        }
+
+        // Get performance summary
+        $stmt = $pdo->prepare("
+            SELECT
+                COUNT(pe.id) as total_evaluations,
+                AVG(pe.overall_rating) as avg_rating,
+                COUNT(CASE WHEN pe.status = 'Completed' THEN 1 END) as completed_evaluations,
+                COUNT(CASE WHEN pe.status = 'Draft' THEN 1 END) as pending_evaluations
+            FROM performance_evaluations pe
+            LEFT JOIN employees e ON pe.employee_id = e.id
+            $where_clause
+        ");
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Get rating distribution
+        $stmt = $pdo->prepare("
+            SELECT
+                CASE
+                    WHEN pe.overall_rating = 5.0 THEN 'Excellent (5.0)'
+                    WHEN pe.overall_rating >= 4.0 THEN 'Very Good (4.0-4.9)'
+                    WHEN pe.overall_rating >= 3.0 THEN 'Good (3.0-3.9)'
+                    WHEN pe.overall_rating >= 2.0 THEN 'Needs Improvement (2.0-2.9)'
+                    ELSE 'Poor (1.0-1.9)'
+                END as rating_category,
+                COUNT(*) as count
+            FROM performance_evaluations pe
+            LEFT JOIN employees e ON pe.employee_id = e.id
+            $where_clause
+            GROUP BY rating_category
+            ORDER BY pe.overall_rating DESC
+        ");
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        $rating_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $rating_distribution = [];
+        foreach ($rating_results as $result) {
+            $rating_distribution[$result['rating_category']] = (int)$result['count'];
+        }
+
+        // Get department performance
+        $stmt = $pdo->prepare("
+            SELECT
+                d.dept_name,
+                AVG(pe.overall_rating) as avg_rating
+            FROM performance_evaluations pe
+            LEFT JOIN employees e ON pe.employee_id = e.id
+            LEFT JOIN departments d ON e.department_id = d.id
+            $where_clause
+            GROUP BY d.id, d.dept_name
+            ORDER BY avg_rating DESC
+        ");
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+
+        $stmt->execute();
+        $dept_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $department_performance = [];
+        foreach ($dept_results as $result) {
+            $department_performance[$result['dept_name']] = round($result['avg_rating'], 1);
+        }
+
         $performance_data = [
             'report_type' => 'performance',
             'generated_at' => date('Y-m-d H:i:s'),
+            'filters' => [
+                'from_date' => $from_date,
+                'to_date' => $to_date,
+                'department_id' => $department_id
+            ],
             'summary' => [
-                'total_evaluations' => 245,
-                'avg_rating' => 4.2,
-                'completed_evaluations' => 198,
-                'pending_evaluations' => 47
+                'total_evaluations' => (int)$summary['total_evaluations'],
+                'avg_rating' => round($summary['avg_rating'], 1),
+                'completed_evaluations' => (int)$summary['completed_evaluations'],
+                'pending_evaluations' => (int)$summary['pending_evaluations']
             ],
-            'rating_distribution' => [
-                'Excellent (5.0)' => 42,
-                'Very Good (4.0-4.9)' => 89,
-                'Good (3.0-3.9)' => 67,
-                'Needs Improvement (2.0-2.9)' => 38,
-                'Poor (1.0-1.9)' => 9
-            ],
-            'department_performance' => [
-                'IT Department' => 4.5,
-                'Finance' => 4.3,
-                'HR' => 4.1,
-                'Marketing' => 3.9,
-                'Operations' => 4.0,
-                'Sales' => 3.8,
-                'Legal' => 4.6,
-                'Admin' => 4.2
-            ]
+            'rating_distribution' => $rating_distribution,
+            'department_performance' => $department_performance
         ];
 
-        echo ApiResponse::success('Performance report generated successfully', $performance_data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Performance report generated successfully',
+            'data' => $performance_data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating performance report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating performance report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $format) {
+function getBenefitsReport($pdo, $user_id, $from_date, $to_date, $department_id, $format) {
     try {
         $where_clause = "";
         $params = [];
@@ -489,16 +736,16 @@ function getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $
         }
 
         // Get insurance summary
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 ip.plan_name,
                 COUNT(ei.id) as enrolled_count,
-                SUM(ei.employee_contribution) as total_employee_contributions,
-                SUM(ei.employer_contribution) as total_employer_contributions,
-                AVG(ei.employee_contribution) as avg_employee_contribution,
-                AVG(ei.employer_contribution) as avg_employer_contribution
+                SUM(ei.employee_premium) as total_employee_contributions,
+                SUM(ei.employer_premium) as total_employer_contributions,
+                AVG(ei.employee_premium) as avg_employee_contribution,
+                AVG(ei.employer_premium) as avg_employer_contribution
             FROM employee_insurance ei
-            LEFT JOIN insurance_plans ip ON ei.plan_id = ip.id
+            LEFT JOIN insurance_plans ip ON ei.insurance_plan_id = ip.id
             LEFT JOIN employees e ON ei.employee_id = e.id
             $where_clause
             GROUP BY ip.id, ip.plan_name
@@ -513,7 +760,7 @@ function getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $
         $insurance_summary = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get dependents covered by HMO
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 COUNT(ed.id) as total_dependents,
                 SUM(CASE WHEN ed.is_hmo_covered = 1 THEN 1 ELSE 0 END) as hmo_covered_dependents,
@@ -531,13 +778,13 @@ function getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $
         $dependents_summary = $stmt->fetch(PDO::FETCH_ASSOC);
 
         // Get benefits utilization by department
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
                 d.dept_name as department,
                 COUNT(DISTINCT ei.employee_id) as employees_with_benefits,
                 COUNT(DISTINCT e.id) as total_employees,
                 COUNT(DISTINCT ei.employee_id) / COUNT(DISTINCT e.id) * 100 as utilization_rate,
-                SUM(ei.employee_contribution + ei.employer_contribution) as total_benefit_cost
+                SUM(ei.employee_premium + ei.employer_premium) as total_benefit_cost
             FROM departments d
             LEFT JOIN employees e ON d.id = e.department_id AND e.employment_status = 'Active'
             LEFT JOIN employee_insurance ei ON e.id = ei.employee_id
@@ -589,30 +836,58 @@ function getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $
             ]
         ];
 
-        echo ApiResponse::success('Benefits report generated successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Benefits report generated successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating benefits report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating benefits report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function getChartsData($conn, $user) {
+function getChartsData($pdo, $user_id) {
     try {
-        // Get attendance trends (mock data)
-        $attendance_trends = [
-            'Jan' => 95.2, 'Feb' => 94.8, 'Mar' => 96.1, 'Apr' => 93.7,
-            'May' => 94.5, 'Jun' => 95.8, 'Jul' => 92.3, 'Aug' => 94.1,
-            'Sep' => 96.4, 'Oct' => 95.7, 'Nov' => 94.9, 'Dec' => 95.3
-        ];
+        // Get real attendance trends - show all available data
+        $stmt = $pdo->prepare("
+            SELECT
+                DATE_FORMAT(attendance_date, '%b') as month,
+                (COUNT(CASE WHEN status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(*)) as attendance_rate
+            FROM attendance_records
+            WHERE attendance_date IS NOT NULL
+            GROUP BY YEAR(attendance_date), MONTH(attendance_date), DATE_FORMAT(attendance_date, '%b')
+            ORDER BY attendance_date
+        ");
+        $stmt->execute();
+        $attendance_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $attendance_trends = [];
+        foreach ($attendance_results as $result) {
+            $attendance_trends[$result['month']] = round($result['attendance_rate'], 1);
+        }
+
+        // Fill missing months with 0 for months with no data
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        foreach ($months as $month) {
+            if (!isset($attendance_trends[$month])) {
+                $attendance_trends[$month] = 0;
+            }
+        }
 
         // Get leave statistics
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT
-                lt.type_name as leave_type,
+                lt.leave_name as leave_type,
                 COUNT(el.id) as count
             FROM employee_leaves el
             LEFT JOIN leave_types lt ON el.leave_type_id = lt.id
             WHERE el.status = 'Approved'
-            GROUP BY el.leave_type_id, lt.type_name
+            GROUP BY el.leave_type_id, lt.leave_name
             ORDER BY count DESC
             LIMIT 5
         ");
@@ -626,7 +901,7 @@ function getChartsData($conn, $user) {
         }
 
         // Get payroll breakdown
-        $stmt = $conn->prepare("
+        $stmt = $pdo->prepare("
             SELECT SUM(ec.basic_salary) as total_basic_salary
             FROM employee_compensation ec
             JOIN employees e ON ec.employee_id = e.id
@@ -642,14 +917,25 @@ function getChartsData($conn, $user) {
             'Bonuses' => floatval($total_salary) * 0.05
         ];
 
-        // Get department attendance (mock data)
-        $stmt = $conn->prepare("SELECT dept_name FROM departments ORDER BY dept_name");
+        // Get real department attendance data - show all available data
+        $stmt = $pdo->prepare("
+            SELECT
+                d.dept_name,
+                (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(ar.id)) as attendance_rate
+            FROM departments d
+            LEFT JOIN employees e ON d.id = e.department_id
+            LEFT JOIN attendance_records ar ON e.id = ar.employee_id
+            WHERE ar.attendance_date IS NOT NULL
+            GROUP BY d.id, d.dept_name
+            HAVING COUNT(ar.id) > 0
+            ORDER BY d.dept_name
+        ");
         $stmt->execute();
-        $departments = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $dept_attendance_results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $department_attendance = [];
-        foreach ($departments as $dept) {
-            $department_attendance[$dept] = rand(90, 98) + (rand(0, 9) / 10);
+        foreach ($dept_attendance_results as $result) {
+            $department_attendance[$result['dept_name']] = round($result['attendance_rate'], 1);
         }
 
         $data = [
@@ -659,13 +945,22 @@ function getChartsData($conn, $user) {
             'department_attendance' => $department_attendance
         ];
 
-        echo ApiResponse::success('Charts data retrieved successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Charts data retrieved successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error retrieving charts data: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error retrieving charts data: ' . $e->getMessage()
+        ]);
     }
 }
 
-function generateCustomReport($conn, $user, $input) {
+function generateCustomReport($pdo, $user_id, $input) {
     try {
         $report_type = $input['report_type'] ?? '';
         $from_date = $input['from_date'] ?? '';
@@ -674,49 +969,65 @@ function generateCustomReport($conn, $user, $input) {
         $format = $input['format'] ?? 'json';
 
         if (!$report_type) {
-            echo ApiResponse::error('Report type is required', 400);
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Report type is required'
+            ]);
             return;
         }
 
         // Generate the appropriate report based on type
         switch ($report_type) {
             case 'employee':
-                getEmployeeReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getEmployeeReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             case 'attendance':
-                getAttendanceReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getAttendanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             case 'payroll':
-                getPayrollReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getPayrollReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             case 'leave':
-                getLeaveReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getLeaveReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             case 'department':
-                getDepartmentReport($conn, $user, $from_date, $to_date, $format);
+                getDepartmentReport($pdo, $user_id, $from_date, $to_date, $format);
                 break;
             case 'performance':
-                getPerformanceReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getPerformanceReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             case 'benefits':
-                getBenefitsReport($conn, $user, $from_date, $to_date, $department_id, $format);
+                getBenefitsReport($pdo, $user_id, $from_date, $to_date, $department_id, $format);
                 break;
             default:
-                echo ApiResponse::error('Invalid report type', 400);
+                http_response_code(400);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Invalid report type'
+                ]);
         }
     } catch (Exception $e) {
-        echo ApiResponse::error('Error generating custom report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error generating custom report: ' . $e->getMessage()
+        ]);
     }
 }
 
-function exportReport($conn, $user, $input) {
+function exportReport($pdo, $user_id, $input) {
     try {
         $report_data = $input['report_data'] ?? [];
         $format = $input['format'] ?? 'csv';
         $filename = $input['filename'] ?? 'report_' . date('Y-m-d_H-i-s');
 
         if (empty($report_data)) {
-            echo ApiResponse::error('Report data is required', 400);
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => 'Report data is required'
+            ]);
             return;
         }
 
@@ -727,9 +1038,18 @@ function exportReport($conn, $user, $input) {
             'expires_at' => date('Y-m-d H:i:s', strtotime('+1 hour'))
         ];
 
-        echo ApiResponse::success('Report export prepared successfully', $data);
+        echo json_encode([
+            'success' => true,
+            'message' => 'Report export prepared successfully',
+            'data' => $data,
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error exporting report: ' . $e->getMessage(), 500);
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Error exporting report: ' . $e->getMessage()
+        ]);
     }
 }
 ?>

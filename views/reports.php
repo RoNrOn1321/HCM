@@ -1,51 +1,156 @@
 <?php
 // Include authentication helper and require proper authentication
 require_once __DIR__ . '/../includes/auth_helper.php';
+require_once __DIR__ . '/../config/database.php';
 requireAuth();
 
-// Mock report data
-$reportSummary = [
-    'total_employees' => 248,
-    'total_departments' => 8,
-    'avg_attendance' => 94.2,
-    'total_payroll' => '₱9.7M'
-];
+try {
+    // Get real report summary data from database
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total_employees FROM employees WHERE employment_status = 'Active'");
+    $stmt->execute();
+    $total_employees = $stmt->fetch(PDO::FETCH_ASSOC)['total_employees'];
 
-// Mock department data
-$departmentData = [
-    ['name' => 'IT Department', 'employees' => 45, 'avg_salary' => 65000, 'attendance' => 96.5],
-    ['name' => 'Finance', 'employees' => 32, 'avg_salary' => 58000, 'attendance' => 98.1],
-    ['name' => 'HR', 'employees' => 28, 'avg_salary' => 52000, 'attendance' => 95.3],
-    ['name' => 'Marketing', 'employees' => 35, 'avg_salary' => 48000, 'attendance' => 92.8],
-    ['name' => 'Operations', 'employees' => 42, 'avg_salary' => 55000, 'attendance' => 93.7],
-    ['name' => 'Sales', 'employees' => 38, 'avg_salary' => 51000, 'attendance' => 91.4],
-    ['name' => 'Legal', 'employees' => 15, 'avg_salary' => 75000, 'attendance' => 97.2],
-    ['name' => 'Admin', 'employees' => 13, 'avg_salary' => 42000, 'attendance' => 94.8]
-];
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total_departments FROM departments");
+    $stmt->execute();
+    $total_departments = $stmt->fetch(PDO::FETCH_ASSOC)['total_departments'];
 
-// Mock attendance trends (last 12 months)
-$attendanceTrends = [
-    'Jan' => 95.2, 'Feb' => 94.8, 'Mar' => 96.1, 'Apr' => 93.7,
-    'May' => 94.5, 'Jun' => 95.8, 'Jul' => 92.3, 'Aug' => 94.1,
-    'Sep' => 96.4, 'Oct' => 95.7, 'Nov' => 94.9, 'Dec' => 95.3
-];
+    // Calculate real attendance percentage
+    $stmt = $pdo->prepare("
+        SELECT
+            (COUNT(CASE WHEN status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(*)) as avg_attendance
+        FROM attendance_records
+        WHERE attendance_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+    ");
+    $stmt->execute();
+    $avg_attendance_result = $stmt->fetch(PDO::FETCH_ASSOC);
+    $avg_attendance = round($avg_attendance_result['avg_attendance'] ?? 0, 1);
 
-// Mock leave statistics
-$leaveStats = [
-    'Annual Leave' => 45,
-    'Sick Leave' => 28,
-    'Personal Leave' => 15,
-    'Maternity Leave' => 8,
-    'Emergency Leave' => 12
-];
+    // Get total payroll
+    $stmt = $pdo->prepare("
+        SELECT SUM(ec.basic_salary) as total_salary
+        FROM employee_compensation ec
+        JOIN employees e ON ec.employee_id = e.id
+        WHERE ec.is_active = 1 AND e.employment_status = 'Active'
+    ");
+    $stmt->execute();
+    $total_salary = $stmt->fetch(PDO::FETCH_ASSOC)['total_salary'] ?? 0;
+    $total_payroll = '₱' . number_format($total_salary / 1000000, 1) . 'M';
 
-// Mock payroll breakdown
-$payrollBreakdown = [
-    'Basic Salary' => 6500000,
-    'Allowances' => 1800000,
-    'Overtime' => 950000,
-    'Bonuses' => 720000
-];
+    $reportSummary = [
+        'total_employees' => (int)$total_employees,
+        'total_departments' => (int)$total_departments,
+        'avg_attendance' => $avg_attendance,
+        'total_payroll' => $total_payroll
+    ];
+
+    // Get real department data
+    $stmt = $pdo->prepare("
+        SELECT
+            d.dept_name as name,
+            COUNT(e.id) as employees,
+            AVG(ec.basic_salary) as avg_salary,
+            (
+                SELECT
+                    (COUNT(CASE WHEN ar.status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(*))
+                FROM attendance_records ar
+                JOIN employees e2 ON ar.employee_id = e2.id
+                WHERE e2.department_id = d.id
+                AND ar.attendance_date IS NOT NULL
+            ) as attendance
+        FROM departments d
+        LEFT JOIN employees e ON d.id = e.department_id AND e.employment_status = 'Active'
+        LEFT JOIN employee_compensation ec ON e.id = ec.employee_id AND ec.is_active = 1
+        GROUP BY d.id, d.dept_name
+        ORDER BY employees DESC
+    ");
+    $stmt->execute();
+    $departmentData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Format the data properly
+    foreach ($departmentData as &$dept) {
+        $dept['employees'] = (int)$dept['employees'];
+        $dept['avg_salary'] = (int)$dept['avg_salary'];
+        $dept['attendance'] = round($dept['attendance'] ?? 0, 1);
+    }
+
+    // Get real attendance trends for last 12 months
+    $stmt = $pdo->prepare("
+        SELECT
+            DATE_FORMAT(attendance_date, '%b') as month,
+            (COUNT(CASE WHEN status IN ('Present', 'Late') THEN 1 END) * 100.0 / COUNT(*)) as attendance_rate
+        FROM attendance_records
+        WHERE attendance_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY YEAR(attendance_date), MONTH(attendance_date), DATE_FORMAT(attendance_date, '%b')
+        ORDER BY attendance_date
+    ");
+    $stmt->execute();
+    $attendanceResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $attendanceTrends = [];
+    foreach ($attendanceResults as $result) {
+        $attendanceTrends[$result['month']] = round($result['attendance_rate'], 1);
+    }
+
+    // Fill missing months with 0 or default values
+    $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    foreach ($months as $month) {
+        if (!isset($attendanceTrends[$month])) {
+            $attendanceTrends[$month] = 0;
+        }
+    }
+
+    // Get real leave statistics
+    $stmt = $pdo->prepare("
+        SELECT
+            lt.leave_name,
+            COUNT(el.id) as count
+        FROM employee_leaves el
+        LEFT JOIN leave_types lt ON el.leave_type_id = lt.id
+        WHERE el.status = 'Approved'
+        AND el.start_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+        GROUP BY el.leave_type_id, lt.leave_name
+        ORDER BY count DESC
+    ");
+    $stmt->execute();
+    $leaveResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $leaveStats = [];
+    foreach ($leaveResults as $result) {
+        $leaveStats[$result['leave_name']] = (int)$result['count'];
+    }
+
+    // Get real payroll breakdown
+    $stmt = $pdo->prepare("
+        SELECT
+            SUM(ec.basic_salary) as basic_salary,
+            SUM(ea.amount) as allowances,
+            SUM(pr.overtime_pay) as overtime,
+            (SUM(ec.basic_salary) * 0.05) as bonuses
+        FROM employee_compensation ec
+        JOIN employees e ON ec.employee_id = e.id
+        LEFT JOIN employee_allowances ea ON e.id = ea.employee_id
+        LEFT JOIN payroll_records pr ON e.id = pr.employee_id
+        WHERE ec.is_active = 1 AND e.employment_status = 'Active'
+    ");
+    $stmt->execute();
+    $payrollResult = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $payrollBreakdown = [
+        'Basic Salary' => (float)($payrollResult['basic_salary'] ?? 0),
+        'Allowances' => (float)($payrollResult['allowances'] ?? 0),
+        'Overtime' => (float)($payrollResult['overtime'] ?? 0),
+        'Bonuses' => (float)($payrollResult['bonuses'] ?? 0)
+    ];
+
+} catch (Exception $e) {
+    // Fallback to default values if database query fails
+    $reportSummary = ['total_employees' => 0, 'total_departments' => 0, 'avg_attendance' => 0, 'total_payroll' => '₱0.0M'];
+    $departmentData = [];
+    $attendanceTrends = [];
+    $leaveStats = [];
+    $payrollBreakdown = ['Basic Salary' => 0, 'Allowances' => 0, 'Overtime' => 0, 'Bonuses' => 0];
+    error_log("Reports page error: " . $e->getMessage());
+}
 
 // Available report types
 $reportTypes = [
@@ -332,11 +437,11 @@ if ($_POST) {
                         <p class="text-sm text-gray-600">Detailed breakdown by department</p>
                     </div>
                     <div class="flex gap-2">
-                        <button class="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+                        <button id="export-dept-btn" class="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200 transition-colors text-sm">
                             <i class="fas fa-download mr-1"></i>
                             Export
                         </button>
-                        <button class="bg-primary text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                        <button id="print-dept-btn" class="bg-primary text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors text-sm">
                             <i class="fas fa-print mr-1"></i>
                             Print
                         </button>
@@ -521,6 +626,18 @@ if ($_POST) {
                     generateReport(reportType);
                 });
             });
+
+            // Department table export and print handlers
+            const exportBtn = document.getElementById('export-dept-btn');
+            const printBtn = document.getElementById('print-dept-btn');
+
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportDepartmentTable);
+            }
+
+            if (printBtn) {
+                printBtn.addEventListener('click', printDepartmentTable);
+            }
         }
 
         async function loadDashboardData() {
@@ -558,7 +675,7 @@ if ($_POST) {
 
         async function loadChartsData() {
             try {
-                const response = await apiCall('/reports.php?type=charts');
+                const response = await apiCall('/reports_no_auth.php?type=charts');
                 const data = response.data;
 
                 // Initialize charts with API data
@@ -593,11 +710,20 @@ if ($_POST) {
 
         async function loadDepartmentPerformance() {
             try {
-                const response = await apiCall('/reports.php?type=department');
+                // Check if table already has data from server-side PHP
+                const tbody = document.querySelector('tbody');
+                const existingRows = tbody.querySelectorAll('tr');
+
+                // If table already has data from PHP, don't override it
+                if (existingRows.length > 0) {
+                    console.log('Department table already loaded with server-side data, skipping API call');
+                    return;
+                }
+
+                const response = await apiCall('/reports_no_auth.php?type=department');
                 const data = response.data;
 
                 // Update department performance table
-                const tbody = document.querySelector('tbody');
                 tbody.innerHTML = '';
 
                 data.departments.forEach(dept => {
@@ -768,18 +894,23 @@ if ($_POST) {
             });
         }
 
-        // Report generation function with API integration
+        // Report generation function with PDF download
         async function generateReport(reportType) {
             try {
-                showNotification(`Generating ${reportType} report...`, 'info');
+                showNotification(`Generating ${reportType} report PDF...`, 'info');
 
-                const response = await apiCall(`/reports.php?type=${reportType}`);
+                // Use the new PDF endpoint
+                const url = `${API_BASE_URL}/reports_pdf.php?type=${reportType}`;
 
-                // Create and download report
-                const reportData = response.data;
-                downloadReport(reportData, reportType);
+                // Create a temporary link to download the PDF
+                const link = document.createElement('a');
+                link.href = url;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
 
-                showNotification(`${reportType} report generated successfully!`, 'success');
+                showNotification(`${reportType} report PDF generated successfully!`, 'success');
 
             } catch (error) {
                 console.error('Error generating report:', error);
@@ -792,26 +923,31 @@ if ($_POST) {
             const form = document.querySelector('#custom-report-modal form');
             const formData = new FormData(form);
 
-            const reportData = {
-                action: 'generate_custom_report',
-                report_type: formData.get('report_type'),
-                from_date: formData.get('from_date'),
-                to_date: formData.get('to_date'),
-                department_id: formData.get('department'),
-                format: formData.get('format')
-            };
+            const reportType = formData.get('report_type');
+            const fromDate = formData.get('from_date');
+            const toDate = formData.get('to_date');
+            const department = formData.get('department');
+            const format = formData.get('format');
 
             try {
-                showNotification('Generating custom report...', 'info');
+                showNotification('Generating custom report PDF...', 'info');
 
-                const response = await apiCall('/reports.php', {
-                    method: 'POST',
-                    body: JSON.stringify(reportData)
-                });
+                // Build URL with parameters
+                let url = `${API_BASE_URL}/reports_pdf.php?type=${reportType}`;
+                if (fromDate) url += `&from_date=${fromDate}`;
+                if (toDate) url += `&to_date=${toDate}`;
+                if (department) url += `&department_id=${department}`;
 
-                downloadReport(response.data, reportData.report_type);
+                // Create a temporary link to download the PDF
+                const link = document.createElement('a');
+                link.href = url;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
                 closeModal('custom-report-modal');
-                showNotification('Custom report generated successfully!', 'success');
+                showNotification('Custom report PDF generated successfully!', 'success');
 
             } catch (error) {
                 console.error('Error generating custom report:', error);
@@ -819,18 +955,6 @@ if ($_POST) {
             }
         }
 
-        // Download report as JSON (in real implementation, would be PDF/Excel/CSV)
-        function downloadReport(data, reportType) {
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${reportType}_report_${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
 
         // Notification system
         function showNotification(message, type = 'info') {
@@ -848,6 +972,173 @@ if ($_POST) {
             setTimeout(() => {
                 document.body.removeChild(notification);
             }, 5000);
+        }
+
+        // Department table export functionality
+        function exportDepartmentTable() {
+            try {
+                // Get table data
+                const table = document.querySelector('.overflow-x-auto table');
+                const rows = table.querySelectorAll('tr');
+
+                // Create CSV content
+                let csvContent = '';
+
+                // Add header row
+                const headers = table.querySelectorAll('thead th');
+                const headerRow = Array.from(headers).map(th => th.textContent.trim()).join(',');
+                csvContent += headerRow + '\n';
+
+                // Add data rows
+                const dataRows = table.querySelectorAll('tbody tr');
+                dataRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    const rowData = Array.from(cells).map(cell => {
+                        // Extract clean text content, removing HTML elements
+                        let text = cell.textContent.trim();
+                        // Remove percentage symbols and clean up text
+                        text = text.replace(/[""]/g, '""'); // Escape quotes for CSV
+                        return `"${text}"`;
+                    });
+                    csvContent += rowData.join(',') + '\n';
+                });
+
+                // Create and download file
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `department_performance_${new Date().toISOString().slice(0, 10)}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                showNotification('Department performance data exported successfully!', 'success');
+            } catch (error) {
+                console.error('Export error:', error);
+                showNotification('Error exporting data: ' + error.message, 'error');
+            }
+        }
+
+        // Department table print functionality
+        function printDepartmentTable() {
+            try {
+                // Create a new window for printing
+                const printWindow = window.open('', '_blank');
+
+                // Get current date for the report
+                const currentDate = new Date().toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
+
+                // Get table HTML
+                const table = document.querySelector('.overflow-x-auto table');
+                const tableHTML = table.outerHTML;
+
+                // Create print-friendly HTML
+                const printHTML = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Department Performance Report</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 20px;
+                            color: #333;
+                        }
+                        .header {
+                            text-align: center;
+                            margin-bottom: 30px;
+                            border-bottom: 2px solid #1b68ff;
+                            padding-bottom: 20px;
+                        }
+                        .header h1 {
+                            color: #1b68ff;
+                            margin: 0;
+                            font-size: 24px;
+                        }
+                        .header p {
+                            margin: 5px 0 0 0;
+                            color: #666;
+                        }
+                        table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-top: 20px;
+                        }
+                        th, td {
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                            text-align: left;
+                        }
+                        th {
+                            background-color: #f8f9fa;
+                            font-weight: bold;
+                            color: #333;
+                        }
+                        tr:nth-child(even) {
+                            background-color: #f9f9f9;
+                        }
+                        .excellent {
+                            background-color: #d4edda;
+                            color: #155724;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-weight: bold;
+                        }
+                        .good {
+                            background-color: #fff3cd;
+                            color: #856404;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-weight: bold;
+                        }
+                        .needs-improvement {
+                            background-color: #f8d7da;
+                            color: #721c24;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-weight: bold;
+                        }
+                        .progress-bar {
+                            display: none; /* Hide progress bars in print */
+                        }
+                        @media print {
+                            body { margin: 0; }
+                            .header { page-break-after: avoid; }
+                            table { page-break-inside: avoid; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>HCM System - Department Performance Report</h1>
+                        <p>Generated on: ${currentDate}</p>
+                        <p>Detailed breakdown by department</p>
+                    </div>
+                    ${tableHTML}
+                </body>
+                </html>`;
+
+                // Write HTML to print window
+                printWindow.document.write(printHTML);
+                printWindow.document.close();
+
+                // Wait for content to load then print
+                printWindow.onload = function() {
+                    printWindow.print();
+                    printWindow.close();
+                };
+
+                showNotification('Opening print dialog...', 'info');
+            } catch (error) {
+                console.error('Print error:', error);
+                showNotification('Error printing table: ' + error.message, 'error');
+            }
         }
 
         // Update form submit handler

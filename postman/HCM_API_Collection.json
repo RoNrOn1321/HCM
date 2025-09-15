@@ -1042,6 +1042,454 @@
       ]
     },
     {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Get Attendance Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "status",
+                  "description": "Get current user's attendance status"
+                }
+              ]
+            },
+            "description": "Get current user's attendance status including clock in/out capabilities and break status."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Today's Attendance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=today",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "today",
+                  "description": "Get today's attendance record for current user"
+                }
+              ]
+            },
+            "description": "Get today's attendance record for the current user including time in, time out, and total hours."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=history&page=1&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "history",
+                  "description": "Get attendance history for current user"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number for pagination"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of records per page"
+                }
+              ]
+            },
+            "description": "Get attendance history for the current user for the past 30 days with pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Attendance Records",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?page=1&limit=25&date_from=2024-01-01&date_to=2024-12-31&employee_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number for pagination"
+                },
+                {
+                  "key": "limit",
+                  "value": "25",
+                  "description": "Number of records per page"
+                },
+                {
+                  "key": "date_from",
+                  "value": "2024-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "date_to",
+                  "value": "2024-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "employee_id",
+                  "value": "",
+                  "description": "Filter by specific employee ID (optional, admin only)"
+                }
+              ]
+            },
+            "description": "Get all attendance records with optional date range and employee filters. Admin users can view all records."
+          },
+          "response": []
+        },
+        {
+          "name": "Clock In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=clock-in",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "clock-in",
+                  "description": "Clock in action"
+                }
+              ]
+            },
+            "description": "Clock in for the current user. Creates attendance record for today with current time."
+          },
+          "response": []
+        },
+        {
+          "name": "Clock Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=clock-out",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "clock-out",
+                  "description": "Clock out action"
+                }
+              ]
+            },
+            "description": "Clock out for the current user. Updates attendance record with time out and calculates total hours."
+          },
+          "response": []
+        },
+        {
+          "name": "Start Break",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=break-start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "break-start",
+                  "description": "Start break action"
+                }
+              ]
+            },
+            "description": "Start break for the current user. Records break start time."
+          },
+          "response": []
+        },
+        {
+          "name": "End Break",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=break-end",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "break-end",
+                  "description": "End break action"
+                }
+              ]
+            },
+            "description": "End break for the current user. Records break end time."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=details&id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "details",
+                  "description": "Get detailed attendance record"
+                },
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Attendance record ID"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific attendance record including employee info and notes."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "summary",
+                  "description": "Get attendance summary statistics"
+                }
+              ]
+            },
+            "description": "Get comprehensive attendance summary with counts for present, absent, late arrivals, etc."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Note to Attendance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendance_id\": 1,\n  \"note_type\": \"general\",\n  \"note_content\": \"Employee arrived late due to traffic.\",\n  \"priority\": \"low\",\n  \"visibility\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?action=add-note",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "add-note",
+                  "description": "Add note action"
+                }
+              ]
+            },
+            "description": "Add a note to an attendance record with type, priority, and visibility options."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Attendance Record",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"time_in\": \"08:00:00\",\n  \"time_out\": \"17:00:00\",\n  \"break_start\": \"12:00:00\",\n  \"break_end\": \"13:00:00\",\n  \"status\": \"Present\",\n  \"notes\": \"Updated by admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/attendance.php?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "attendance.php"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Attendance record ID to update"
+                }
+              ]
+            },
+            "description": "Update an existing attendance record. Admin only feature for correcting attendance data."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "API Info",
       "item": [
         {
