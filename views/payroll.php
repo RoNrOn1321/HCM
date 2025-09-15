@@ -216,8 +216,8 @@ if ($_POST) {
             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-900">Payroll Records - March 2024</h3>
-                        <p class="text-sm text-gray-600"><?php echo count($payrollRecords); ?> employees processed</p>
+                        <h3 id="payroll-records-title" class="text-lg font-semibold text-gray-900">Payroll Records - Loading...</h3>
+                        <p id="payroll-records-count" class="text-sm text-gray-600">Loading employees...</p>
                     </div>
                     <div class="flex gap-2">
                         <button onclick="refreshAllData()" class="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-200 transition-colors text-sm">
@@ -701,13 +701,10 @@ if ($_POST) {
 
         async function loadPayrollRecords(periodId = null) {
             try {
-                console.log('Loading payroll records for period:', periodId || 'all periods');
                 const result = await payrollAPI.getPayrollRecords(periodId);
-                console.log('Payroll records result:', result);
 
                 if (result.success) {
                     updatePayrollTable(result.data);
-                    console.log('Table updated with', result.data.length, 'records');
                     updateRecordsHeader(result.data.length);
                 } else {
                     throw new Error(result.error || 'Failed to load records');
@@ -720,9 +717,7 @@ if ($_POST) {
 
         async function loadPayrollPeriods() {
             try {
-                console.log('Loading payroll periods...');
                 const result = await payrollAPI.getPayrollPeriods();
-                console.log('Payroll periods result:', result);
 
                 if (result.success) {
                     allPeriods = result.data;
@@ -731,13 +726,8 @@ if ($_POST) {
                     // Set current period to the most recent one
                     if (allPeriods.length > 0 && !currentPeriod) {
                         currentPeriod = allPeriods[0];
-                        console.log('Set currentPeriod to:', currentPeriod);
                         updateCurrentPeriodDisplay();
                     }
-
-                    // Force check the selector state
-                    const selector = document.getElementById('period-selector');
-                    console.log('Final selector state:', selector?.innerHTML);
                 } else {
                     throw new Error(result.error || 'Failed to load periods');
                 }
@@ -814,12 +804,12 @@ if ($_POST) {
         }
 
         function updateRecordsHeader(recordCount = null) {
-            const headerTitle = document.querySelector('.bg-white.rounded-lg h3');
+            const headerTitle = document.getElementById('payroll-records-title');
             if (headerTitle && currentPeriod) {
                 headerTitle.textContent = `Payroll Records - ${currentPeriod.name}`;
             }
 
-            const headerSubtitle = document.querySelector('.bg-white.rounded-lg p.text-sm');
+            const headerSubtitle = document.getElementById('payroll-records-count');
             if (headerSubtitle) {
                 if (recordCount !== null) {
                     headerSubtitle.textContent = `${recordCount} employees processed`;
@@ -835,7 +825,6 @@ if ($_POST) {
 
             try {
                 currentPeriod = JSON.parse(selectedOption.dataset.period);
-                console.log('Period changed to:', currentPeriod);
 
                 showNotification(`Switched to ${currentPeriod.name}`, 'info');
 
