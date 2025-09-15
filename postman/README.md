@@ -186,15 +186,44 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 ```
 
+## Benefits API Testing
+
+### New Collection: Benefits API
+Import the `Benefits_API_Collection.json` file to test the complete benefits management system:
+
+#### Available Endpoints:
+1. **Benefits Overview** - `GET /benefits.php`
+   - Returns statistics, recent enrollments, and active plans
+2. **Benefit Plans** - `GET/POST/PUT/DELETE /benefits.php/plans`
+   - Manage insurance plans and coverage details
+3. **Insurance Providers** - `GET/POST /benefits.php/providers`
+   - Manage insurance provider information
+4. **Employee Enrollments** - `GET/POST /benefits.php/enrollments`
+   - Handle employee benefit enrollments
+
+#### Testing Workflow:
+1. **Authentication** - Login to get access token
+2. **Get Overview** - View benefits statistics and recent activity
+3. **List Plans** - View all available benefit plans
+4. **Create/Update Plans** - Test plan management
+5. **Manage Enrollments** - Test employee enrollment process
+6. **Error Handling** - Test unauthorized access and invalid data
+
+#### Sample Test Data:
+- Insurance Providers: Maxicare, Medicard, PhilamLife
+- Sample Plans: Maxicare Prime, Medicard Gold, PhilamLife Group Term
+- Test Enrollments: Multiple employees with different plans
+
 ## Next Steps
 
-After testing the authentication and employee endpoints, you can:
+After testing the authentication, employee, and benefits endpoints, you can:
 
 1. Implement additional endpoints (departments, payroll, attendance)
 2. Add more complex filtering and sorting
 3. Implement file upload for employee photos
 4. Add email notifications
 5. Create reporting endpoints
+6. Add benefits dependency management for family plans
 
 ## Support
 

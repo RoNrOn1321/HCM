@@ -90,6 +90,13 @@ $reportTypes = [
         'description' => 'Employee performance evaluation data',
         'icon' => 'fas fa-chart-line',
         'color' => 'indigo'
+    ],
+    [
+        'id' => 'benefits',
+        'name' => 'Benefits Report',
+        'description' => 'Comprehensive benefits analysis and utilization data',
+        'icon' => 'fas fa-shield-alt',
+        'color' => 'emerald'
     ]
 ];
 
@@ -237,6 +244,7 @@ if ($_POST) {
                     <?php endforeach; ?>
                 </div>
             </div>
+
 
             <!-- Charts Section -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -463,21 +471,180 @@ if ($_POST) {
     <?php include 'includes/scripts.php'; ?>
 
     <script>
-        // Initialize charts
+        // API configuration
+        const API_BASE_URL = '/HCM/api';
+        let authToken = localStorage.getItem('auth_token');
+
+        // API helper function
+        async function apiCall(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+            };
+
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers: { ...headers, ...options.headers }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'API request failed');
+            }
+
+            return data;
+        }
+
+        // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
-            initializeCharts();
+            loadDashboardData();
+            initializeEventListeners();
+
+            // Check if we should auto-generate a specific report
+            const urlParams = new URLSearchParams(window.location.search);
+            const reportType = urlParams.get('report');
+            if (reportType) {
+                setTimeout(() => {
+                    generateReport(reportType);
+                }, 1000); // Wait for page to load
+            }
         });
 
-        function initializeCharts() {
+        function initializeEventListeners() {
+            // Report type cards click handlers
+            document.querySelectorAll('[onclick^="generateReport"]').forEach(card => {
+                card.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const onclick = this.getAttribute('onclick');
+                    const reportType = onclick.match(/generateReport\('([^']+)'\)/)[1];
+                    generateReport(reportType);
+                });
+            });
+        }
+
+        async function loadDashboardData() {
+            try {
+                // Load dashboard metrics
+                await loadDashboardMetrics();
+
+                // Load charts data
+                await loadChartsData();
+
+                // Load department performance table
+                await loadDepartmentPerformance();
+
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                showNotification('Error loading dashboard data: ' + error.message, 'error');
+            }
+        }
+
+        async function loadDashboardMetrics() {
+            try {
+                const response = await apiCall('/reports.php?type=dashboard_metrics');
+                const metrics = response.data;
+
+                // Update metric cards
+                document.querySelector('[class*="text-2xl font-bold text-gray-900"]').textContent = metrics.total_employees;
+                document.querySelectorAll('[class*="text-2xl font-bold text-gray-900"]')[1].textContent = metrics.total_departments;
+                document.querySelectorAll('[class*="text-2xl font-bold text-gray-900"]')[2].textContent = metrics.avg_attendance + '%';
+                document.querySelectorAll('[class*="text-2xl font-bold text-gray-900"]')[3].textContent = metrics.total_payroll;
+
+            } catch (error) {
+                console.error('Error loading dashboard metrics:', error);
+            }
+        }
+
+        async function loadChartsData() {
+            try {
+                const response = await apiCall('/reports.php?type=charts');
+                const data = response.data;
+
+                // Initialize charts with API data
+                initializeCharts(data);
+
+            } catch (error) {
+                console.error('Error loading charts data:', error);
+                // Fallback to mock data
+                const fallbackData = {
+                    attendance_trends: {
+                        'Jan': 95.2, 'Feb': 94.8, 'Mar': 96.1, 'Apr': 93.7,
+                        'May': 94.5, 'Jun': 95.8, 'Jul': 92.3, 'Aug': 94.1,
+                        'Sep': 96.4, 'Oct': 95.7, 'Nov': 94.9, 'Dec': 95.3
+                    },
+                    leave_statistics: {
+                        'Annual Leave': 45, 'Sick Leave': 28, 'Personal Leave': 15,
+                        'Maternity Leave': 8, 'Emergency Leave': 12
+                    },
+                    payroll_breakdown: {
+                        'Basic Salary': 6500000, 'Allowances': 1800000,
+                        'Overtime': 950000, 'Bonuses': 720000
+                    },
+                    department_attendance: {
+                        'IT Department': 96.5, 'Finance': 98.1, 'HR': 95.3,
+                        'Marketing': 92.8, 'Operations': 93.7, 'Sales': 91.4,
+                        'Legal': 97.2, 'Admin': 94.8
+                    }
+                };
+                initializeCharts(fallbackData);
+            }
+        }
+
+        async function loadDepartmentPerformance() {
+            try {
+                const response = await apiCall('/reports.php?type=department');
+                const data = response.data;
+
+                // Update department performance table
+                const tbody = document.querySelector('tbody');
+                tbody.innerHTML = '';
+
+                data.departments.forEach(dept => {
+                    const row = document.createElement('tr');
+                    row.className = 'bg-white border-b hover:bg-gray-50';
+
+                    const performanceClass = dept.attendance_rate >= 95 ? 'bg-green-100 text-green-800' :
+                                           (dept.attendance_rate >= 90 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800');
+                    const performanceText = dept.attendance_rate >= 95 ? 'Excellent' :
+                                          (dept.attendance_rate >= 90 ? 'Good' : 'Needs Improvement');
+
+                    row.innerHTML = `
+                        <td class="px-6 py-4 font-medium text-gray-900">${dept.department}</td>
+                        <td class="px-6 py-4">${dept.employee_count}</td>
+                        <td class="px-6 py-4">₱${Number(dept.avg_salary).toLocaleString()}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <span class="mr-2">${dept.attendance_rate}%</span>
+                                <div class="w-16 bg-gray-200 rounded-full h-2">
+                                    <div class="bg-green-500 h-2 rounded-full" style="width: ${dept.attendance_rate}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="${performanceClass} text-xs font-medium px-2.5 py-0.5 rounded">
+                                ${performanceText}
+                            </span>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Error loading department performance:', error);
+            }
+        }
+
+        function initializeCharts(data) {
             // Attendance Trends Chart
             const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
             new Chart(attendanceCtx, {
                 type: 'line',
                 data: {
-                    labels: <?php echo json_encode(array_keys($attendanceTrends)); ?>,
+                    labels: Object.keys(data.attendance_trends),
                     datasets: [{
                         label: 'Attendance %',
-                        data: <?php echo json_encode(array_values($attendanceTrends)); ?>,
+                        data: Object.values(data.attendance_trends),
                         borderColor: '#1b68ff',
                         backgroundColor: 'rgba(27, 104, 255, 0.1)',
                         tension: 0.4,
@@ -507,9 +674,9 @@ if ($_POST) {
             new Chart(leaveCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: <?php echo json_encode(array_keys($leaveStats)); ?>,
+                    labels: Object.keys(data.leave_statistics),
                     datasets: [{
-                        data: <?php echo json_encode(array_values($leaveStats)); ?>,
+                        data: Object.values(data.leave_statistics),
                         backgroundColor: [
                             '#1b68ff',
                             '#dc3545',
@@ -535,10 +702,10 @@ if ($_POST) {
             new Chart(payrollCtx, {
                 type: 'bar',
                 data: {
-                    labels: <?php echo json_encode(array_keys($payrollBreakdown)); ?>,
+                    labels: Object.keys(data.payroll_breakdown),
                     datasets: [{
                         label: 'Amount (₱)',
-                        data: <?php echo json_encode(array_values($payrollBreakdown)); ?>,
+                        data: Object.values(data.payroll_breakdown),
                         backgroundColor: [
                             '#1b68ff',
                             '#3ad29f',
@@ -573,10 +740,10 @@ if ($_POST) {
             new Chart(departmentCtx, {
                 type: 'radar',
                 data: {
-                    labels: <?php echo json_encode(array_column($departmentData, 'name')); ?>,
+                    labels: Object.keys(data.department_attendance),
                     datasets: [{
                         label: 'Attendance Rate',
-                        data: <?php echo json_encode(array_column($departmentData, 'attendance')); ?>,
+                        data: Object.values(data.department_attendance),
                         borderColor: '#1b68ff',
                         backgroundColor: 'rgba(27, 104, 255, 0.2)',
                         pointBackgroundColor: '#1b68ff'
@@ -601,12 +768,98 @@ if ($_POST) {
             });
         }
 
-        // Report generation function
-        function generateReport(reportType) {
-            console.log('Generating report:', reportType);
-            alert(`Generating ${reportType} report...`);
-            // In real implementation, this would trigger report generation
+        // Report generation function with API integration
+        async function generateReport(reportType) {
+            try {
+                showNotification(`Generating ${reportType} report...`, 'info');
+
+                const response = await apiCall(`/reports.php?type=${reportType}`);
+
+                // Create and download report
+                const reportData = response.data;
+                downloadReport(reportData, reportType);
+
+                showNotification(`${reportType} report generated successfully!`, 'success');
+
+            } catch (error) {
+                console.error('Error generating report:', error);
+                showNotification('Error generating report: ' + error.message, 'error');
+            }
         }
+
+        // Custom report generation
+        async function generateCustomReport() {
+            const form = document.querySelector('#custom-report-modal form');
+            const formData = new FormData(form);
+
+            const reportData = {
+                action: 'generate_custom_report',
+                report_type: formData.get('report_type'),
+                from_date: formData.get('from_date'),
+                to_date: formData.get('to_date'),
+                department_id: formData.get('department'),
+                format: formData.get('format')
+            };
+
+            try {
+                showNotification('Generating custom report...', 'info');
+
+                const response = await apiCall('/reports.php', {
+                    method: 'POST',
+                    body: JSON.stringify(reportData)
+                });
+
+                downloadReport(response.data, reportData.report_type);
+                closeModal('custom-report-modal');
+                showNotification('Custom report generated successfully!', 'success');
+
+            } catch (error) {
+                console.error('Error generating custom report:', error);
+                showNotification('Error generating custom report: ' + error.message, 'error');
+            }
+        }
+
+        // Download report as JSON (in real implementation, would be PDF/Excel/CSV)
+        function downloadReport(data, reportType) {
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${reportType}_report_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+                type === 'success' ? 'bg-green-100 text-green-800' :
+                type === 'error' ? 'bg-red-100 text-red-800' :
+                type === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-blue-100 text-blue-800'
+            }`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 5000);
+        }
+
+        // Update form submit handler
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('#custom-report-modal form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    generateCustomReport();
+                });
+            }
+        });
     </script>
 </body>
 </html>

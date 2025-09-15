@@ -61,6 +61,14 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                 </a>
             </li>
 
+            <!-- Manage Dependents -->
+            <li>
+                <a href="dependents.php" class="flex items-center p-2 rounded-lg group <?php echo ($currentPage == 'dependents') ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">
+                    <i class="fas fa-users-cog w-5 h-5 <?php echo ($currentPage == 'dependents') ? 'text-white' : 'text-gray-500 group-hover:text-gray-900'; ?>"></i>
+                    <span class="ml-3">Manage Dependents</span>
+                </a>
+            </li>
+
             <!-- Settings -->
             <li>
                 <a href="settings.php" class="flex items-center p-2 rounded-lg group <?php echo ($currentPage == 'settings') ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">

@@ -408,6 +408,640 @@
       ]
     },
     {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Get Dashboard Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=dashboard_metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "dashboard_metrics",
+                  "description": "Get dashboard summary metrics"
+                }
+              ]
+            },
+            "description": "Get dashboard metrics including total employees, departments, attendance rate, and payroll."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Employee Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=employee&from_date=2023-01-01&to_date=2023-12-31&department_id=&format=json",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "employee",
+                  "description": "Report type"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2023-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2023-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                },
+                {
+                  "key": "format",
+                  "value": "json",
+                  "description": "Output format (json, pdf, excel, csv)"
+                }
+              ]
+            },
+            "description": "Generate comprehensive employee report with filtering options."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Attendance Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=attendance&from_date=2023-01-01&to_date=2023-12-31&department_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "attendance",
+                  "description": "Report type"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2023-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2023-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                }
+              ]
+            },
+            "description": "Generate attendance report with trends and department breakdown."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Payroll Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=payroll&department_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "payroll",
+                  "description": "Report type"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                }
+              ]
+            },
+            "description": "Generate payroll report with salary breakdown and department statistics."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Leave Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=leave&from_date=2023-01-01&to_date=2023-12-31&department_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "leave",
+                  "description": "Report type"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2023-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2023-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                }
+              ]
+            },
+            "description": "Generate leave report with statistics and status breakdown."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Department Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=department",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "department",
+                  "description": "Report type"
+                }
+              ]
+            },
+            "description": "Generate department performance report with employee counts and statistics."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Performance Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=performance&from_date=2023-01-01&to_date=2023-12-31&department_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "performance",
+                  "description": "Report type"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2023-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2023-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                }
+              ]
+            },
+            "description": "Generate performance evaluation report with ratings and distribution."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Benefits Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=benefits&from_date=2023-01-01&to_date=2023-12-31&department_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "benefits",
+                  "description": "Report type"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2023-01-01",
+                  "description": "Start date filter (optional)"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2023-12-31",
+                  "description": "End date filter (optional)"
+                },
+                {
+                  "key": "department_id",
+                  "value": "",
+                  "description": "Department filter (optional)"
+                }
+              ]
+            },
+            "description": "Generate comprehensive benefits report with insurance plans, utilization rates, and cost analysis."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Charts Data",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reports.php?type=charts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "charts",
+                  "description": "Get data for dashboard charts"
+                }
+              ]
+            },
+            "description": "Get formatted data for dashboard charts (attendance trends, leave stats, payroll breakdown, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Custom Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"generate_custom_report\",\n  \"report_type\": \"employee\",\n  \"from_date\": \"2023-01-01\",\n  \"to_date\": \"2023-12-31\",\n  \"department_id\": \"\",\n  \"format\": \"pdf\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports.php",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ]
+            },
+            "description": "Generate a custom report with specific parameters and format."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"export_report\",\n  \"report_data\": {\n    \"report_type\": \"employee\",\n    \"generated_at\": \"2023-09-15 10:30:00\",\n    \"total_records\": 248,\n    \"employees\": []\n  },\n  \"format\": \"excel\",\n  \"filename\": \"employee_report_2023\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reports.php",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "reports.php"
+              ]
+            },
+            "description": "Export report data to specified format (PDF, Excel, CSV)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dependents",
+      "item": [
+        {
+          "name": "Get All Dependents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dependents.php?relationship=&is_beneficiary=&is_hmo_covered=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ],
+              "query": [
+                {
+                  "key": "relationship",
+                  "value": "",
+                  "description": "Filter by relationship type (Spouse, Child, Parent, Sibling, Other)"
+                },
+                {
+                  "key": "is_beneficiary",
+                  "value": "",
+                  "description": "Filter by beneficiary status (1 for beneficiaries, 0 for non-beneficiaries)"
+                },
+                {
+                  "key": "is_hmo_covered",
+                  "value": "",
+                  "description": "Filter by HMO coverage (1 for covered, 0 for not covered)"
+                }
+              ]
+            },
+            "description": "Get list of all employee dependents with optional filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dependents by Employee",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dependents.php?employee_id=1&relationship=&is_beneficiary=&is_hmo_covered=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ],
+              "query": [
+                {
+                  "key": "employee_id",
+                  "value": "1",
+                  "description": "Employee ID to get dependents for"
+                },
+                {
+                  "key": "relationship",
+                  "value": "",
+                  "description": "Filter by relationship type (optional)"
+                },
+                {
+                  "key": "is_beneficiary",
+                  "value": "",
+                  "description": "Filter by beneficiary status (optional)"
+                },
+                {
+                  "key": "is_hmo_covered",
+                  "value": "",
+                  "description": "Filter by HMO coverage (optional)"
+                }
+              ]
+            },
+            "description": "Get dependents for a specific employee with optional filters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dependent by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dependents.php?dependent_id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ],
+              "query": [
+                {
+                  "key": "dependent_id",
+                  "value": "1",
+                  "description": "Specific dependent ID to retrieve"
+                }
+              ]
+            },
+            "description": "Get detailed information about a specific dependent."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Dependent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": 1,\n  \"dependent_name\": \"John Doe Jr.\",\n  \"relationship\": \"Child\",\n  \"date_of_birth\": \"2010-05-15\",\n  \"gender\": \"M\",\n  \"is_beneficiary\": 1,\n  \"beneficiary_percentage\": 25.00,\n  \"is_hmo_covered\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/dependents.php",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ]
+            },
+            "description": "Create a new dependent record for an employee."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Dependent",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dependent_id\": 1,\n  \"dependent_name\": \"Jane Doe Jr.\",\n  \"relationship\": \"Child\",\n  \"date_of_birth\": \"2010-05-15\",\n  \"gender\": \"F\",\n  \"is_beneficiary\": 1,\n  \"beneficiary_percentage\": 30.00,\n  \"is_hmo_covered\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/dependents.php",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ]
+            },
+            "description": "Update an existing dependent record."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Dependent",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/dependents.php?dependent_id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "dependents.php"
+              ],
+              "query": [
+                {
+                  "key": "dependent_id",
+                  "value": "1",
+                  "description": "Dependent ID to delete"
+                }
+              ]
+            },
+            "description": "Delete a dependent record (permanent deletion)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "API Info",
       "item": [
         {
