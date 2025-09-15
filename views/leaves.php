@@ -2,98 +2,6 @@
 // Include authentication helper and require proper authentication
 require_once __DIR__ . '/../includes/auth_helper.php';
 requireAuth();
-
-// Mock leave types
-$leaveTypes = [
-    ['id' => 1, 'name' => 'Annual Leave', 'days_allowed' => 21, 'color' => 'blue'],
-    ['id' => 2, 'name' => 'Sick Leave', 'days_allowed' => 10, 'color' => 'red'],
-    ['id' => 3, 'name' => 'Personal Leave', 'days_allowed' => 5, 'color' => 'purple'],
-    ['id' => 4, 'name' => 'Maternity Leave', 'days_allowed' => 90, 'color' => 'pink'],
-    ['id' => 5, 'name' => 'Paternity Leave', 'days_allowed' => 7, 'color' => 'green'],
-    ['id' => 6, 'name' => 'Emergency Leave', 'days_allowed' => 3, 'color' => 'orange']
-];
-
-// Mock leave balance for current user
-$leaveBalance = [
-    ['type' => 'Annual Leave', 'total' => 21, 'used' => 8, 'remaining' => 13, 'color' => 'blue'],
-    ['type' => 'Sick Leave', 'total' => 10, 'used' => 2, 'remaining' => 8, 'color' => 'red'],
-    ['type' => 'Personal Leave', 'total' => 5, 'used' => 1, 'remaining' => 4, 'color' => 'purple'],
-    ['type' => 'Emergency Leave', 'total' => 3, 'used' => 0, 'remaining' => 3, 'color' => 'orange']
-];
-
-// Mock leave requests data
-$leaveRequests = [
-    [
-        'id' => 1,
-        'employee_id' => 'EMP001',
-        'employee_name' => 'Sarah Johnson',
-        'leave_type' => 'Annual Leave',
-        'start_date' => '2024-03-20',
-        'end_date' => '2024-03-22',
-        'days' => 3,
-        'reason' => 'Family vacation',
-        'status' => 'Pending',
-        'applied_date' => '2024-03-10',
-        'approved_by' => null,
-        'avatar' => 'https://images.unsplash.com/photo-1494790108755-2616b612b890?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80'
-    ],
-    [
-        'id' => 2,
-        'employee_id' => 'EMP002',
-        'employee_name' => 'Michael Chen',
-        'leave_type' => 'Sick Leave',
-        'start_date' => '2024-03-15',
-        'end_date' => '2024-03-16',
-        'days' => 2,
-        'reason' => 'Medical appointment',
-        'status' => 'Approved',
-        'applied_date' => '2024-03-12',
-        'approved_by' => 'HR Manager',
-        'avatar' => 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80'
-    ],
-    [
-        'id' => 3,
-        'employee_id' => 'EMP003',
-        'employee_name' => 'Emily Rodriguez',
-        'leave_type' => 'Personal Leave',
-        'start_date' => '2024-03-25',
-        'end_date' => '2024-03-25',
-        'days' => 1,
-        'reason' => 'Personal matters',
-        'status' => 'Rejected',
-        'applied_date' => '2024-03-08',
-        'approved_by' => 'HR Manager',
-        'avatar' => 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80'
-    ]
-];
-
-// Leave summary statistics
-$leaveSummary = [
-    'total_requests' => 45,
-    'pending_requests' => 12,
-    'approved_requests' => 28,
-    'rejected_requests' => 5
-];
-
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['action'])) {
-        switch ($_POST['action']) {
-            case 'apply_leave':
-                $success = "Leave application submitted successfully!";
-                break;
-            case 'approve_leave':
-                $success = "Leave request approved successfully!";
-                break;
-            case 'reject_leave':
-                $success = "Leave request rejected!";
-                break;
-            case 'cancel_leave':
-                $success = "Leave request cancelled successfully!";
-                break;
-        }
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,11 +44,8 @@ if ($_POST) {
     <!-- Main Content -->
     <div class="p-4 sm:ml-64">
         <div class="p-4 rounded-lg mt-14">
-            <?php if (isset($success)): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                <?php echo htmlspecialchars($success); ?>
-            </div>
-            <?php endif; ?>
+            <!-- Alert Messages -->
+            <div id="alert-container"></div>
 
             <!-- Page Header -->
             <div class="mb-6 flex items-center justify-between">
@@ -155,29 +60,15 @@ if ($_POST) {
             </div>
 
             <!-- Leave Balance Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <?php foreach ($leaveBalance as $balance): ?>
-                <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-medium text-gray-600"><?php echo htmlspecialchars($balance['type']); ?></h3>
-                        <div class="w-3 h-3 bg-<?php echo $balance['color']; ?>-500 rounded-full"></div>
-                    </div>
-                    <div class="flex items-baseline">
-                        <p class="text-2xl font-bold text-gray-900"><?php echo $balance['remaining']; ?></p>
-                        <p class="text-sm text-gray-500 ml-1">/ <?php echo $balance['total']; ?> days</p>
-                    </div>
-                    <div class="mt-2">
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-<?php echo $balance['color']; ?>-500 h-2 rounded-full" style="width: <?php echo ($balance['remaining'] / $balance['total']) * 100; ?>%"></div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-1"><?php echo $balance['used']; ?> days used</p>
-                    </div>
+            <div id="leave-balance-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <!-- Loading placeholder -->
+                <div class="col-span-full flex justify-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
-                <?php endforeach; ?>
             </div>
 
             <!-- Leave Summary Statistics -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div id="leave-summary-stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                     <div class="flex items-center">
                         <div class="p-2 bg-blue-100 rounded-lg">
@@ -185,7 +76,7 @@ if ($_POST) {
                         </div>
                         <div class="ml-4">
                             <p class="text-sm font-medium text-gray-600">Total Requests</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $leaveSummary['total_requests']; ?></p>
+                            <p id="total-requests" class="text-2xl font-bold text-gray-900">-</p>
                         </div>
                     </div>
                 </div>
@@ -197,7 +88,7 @@ if ($_POST) {
                         </div>
                         <div class="ml-4">
                             <p class="text-sm font-medium text-gray-600">Pending</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $leaveSummary['pending_requests']; ?></p>
+                            <p id="pending-requests" class="text-2xl font-bold text-gray-900">-</p>
                         </div>
                     </div>
                 </div>
@@ -209,7 +100,7 @@ if ($_POST) {
                         </div>
                         <div class="ml-4">
                             <p class="text-sm font-medium text-gray-600">Approved</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $leaveSummary['approved_requests']; ?></p>
+                            <p id="approved-requests" class="text-2xl font-bold text-gray-900">-</p>
                         </div>
                     </div>
                 </div>
@@ -221,7 +112,7 @@ if ($_POST) {
                         </div>
                         <div class="ml-4">
                             <p class="text-sm font-medium text-gray-600">Rejected</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $leaveSummary['rejected_requests']; ?></p>
+                            <p id="rejected-requests" class="text-2xl font-bold text-gray-900">-</p>
                         </div>
                     </div>
                 </div>
@@ -242,12 +133,6 @@ if ($_POST) {
                     <div class="flex gap-2">
                         <select id="leave-type-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-40 p-2.5">
                             <option value="">All Types</option>
-                            <option value="Annual Leave">Annual Leave</option>
-                            <option value="Sick Leave">Sick Leave</option>
-                            <option value="Personal Leave">Personal Leave</option>
-                            <option value="Maternity Leave">Maternity Leave</option>
-                            <option value="Paternity Leave">Paternity Leave</option>
-                            <option value="Emergency Leave">Emergency Leave</option>
                         </select>
 
                         <select id="status-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block w-40 p-2.5">
@@ -255,9 +140,10 @@ if ($_POST) {
                             <option value="Pending">Pending</option>
                             <option value="Approved">Approved</option>
                             <option value="Rejected">Rejected</option>
+                            <option value="Cancelled">Cancelled</option>
                         </select>
 
-                        <button class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                        <button id="export-btn" class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
                             <i class="fas fa-download mr-2"></i>
                             Export
                         </button>
@@ -269,7 +155,7 @@ if ($_POST) {
             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h3 class="text-lg font-semibold text-gray-900">Leave Requests</h3>
-                    <p class="text-sm text-gray-600"><?php echo count($leaveRequests); ?> requests found</p>
+                    <p id="requests-count" class="text-sm text-gray-600">Loading requests...</p>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -287,89 +173,26 @@ if ($_POST) {
                                 <th class="px-6 py-3">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <?php foreach ($leaveRequests as $request): ?>
-                            <tr class="bg-white border-b hover:bg-gray-50">
-                                <td class="px-6 py-4" data-sort="employee">
-                                    <div class="flex items-center">
-                                        <img class="w-10 h-10 rounded-full mr-3" src="<?php echo htmlspecialchars($request['avatar']); ?>" alt="employee">
-                                        <div>
-                                            <div class="font-medium text-gray-900"><?php echo htmlspecialchars($request['employee_name']); ?></div>
-                                            <div class="text-gray-500"><?php echo htmlspecialchars($request['employee_id']); ?></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4" data-sort="leave_type">
-                                    <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                        <?php echo htmlspecialchars($request['leave_type']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4" data-sort="start_date"><?php echo date('M d, Y', strtotime($request['start_date'])); ?></td>
-                                <td class="px-6 py-4" data-sort="end_date"><?php echo date('M d, Y', strtotime($request['end_date'])); ?></td>
-                                <td class="px-6 py-4 font-medium" data-sort="days"><?php echo $request['days']; ?> day<?php echo $request['days'] > 1 ? 's' : ''; ?></td>
-                                <td class="px-6 py-4">
-                                    <span class="text-gray-600" title="<?php echo htmlspecialchars($request['reason']); ?>">
-                                        <?php echo strlen($request['reason']) > 30 ? substr(htmlspecialchars($request['reason']), 0, 30) . '...' : htmlspecialchars($request['reason']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4" data-sort="status">
-                                    <span class="<?php
-                                        echo $request['status'] == 'Approved' ? 'bg-green-100 text-green-800' :
-                                            ($request['status'] == 'Rejected' ? 'bg-red-100 text-red-800' :
-                                            'bg-yellow-100 text-yellow-800');
-                                    ?> text-xs font-medium px-2.5 py-0.5 rounded">
-                                        <?php echo htmlspecialchars($request['status']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4" data-sort="applied_date"><?php echo date('M d, Y', strtotime($request['applied_date'])); ?></td>
-                                <td class="px-6 py-4">
-                                    <div class="flex items-center space-x-2">
-                                        <button class="text-blue-600 hover:text-blue-800" title="View Details" onclick="viewLeaveDetails(<?php echo $request['id']; ?>)">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <?php if ($request['status'] == 'Pending'): ?>
-                                        <form method="POST" action="" class="inline">
-                                            <input type="hidden" name="action" value="approve_leave">
-                                            <input type="hidden" name="leave_id" value="<?php echo $request['id']; ?>">
-                                            <button type="submit" class="text-green-600 hover:text-green-800" title="Approve">
-                                                <i class="fas fa-check"></i>
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="" class="inline">
-                                            <input type="hidden" name="action" value="reject_leave">
-                                            <input type="hidden" name="leave_id" value="<?php echo $request['id']; ?>">
-                                            <button type="submit" class="text-red-600 hover:text-red-800" title="Reject">
-                                                <i class="fas fa-times"></i>
-                                            </button>
-                                        </form>
-                                        <?php endif; ?>
-                                        <?php if ($request['status'] == 'Approved' && strtotime($request['start_date']) > time()): ?>
-                                        <form method="POST" action="" class="inline">
-                                            <input type="hidden" name="action" value="cancel_leave">
-                                            <input type="hidden" name="leave_id" value="<?php echo $request['id']; ?>">
-                                            <button type="submit" class="text-orange-600 hover:text-orange-800" title="Cancel">
-                                                <i class="fas fa-ban"></i>
-                                            </button>
-                                        </form>
-                                        <?php endif; ?>
+                        <tbody id="leave-table-body">
+                            <tr>
+                                <td colspan="9" class="px-6 py-8 text-center">
+                                    <div class="flex justify-center">
+                                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                                     </div>
                                 </td>
                             </tr>
-                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
 
                 <!-- Pagination -->
-                <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <div id="pagination-container" class="px-6 py-4 bg-gray-50 border-t border-gray-200">
                     <div class="flex items-center justify-between">
-                        <div class="text-sm text-gray-700">
-                            Showing <span class="font-medium">1</span> to <span class="font-medium"><?php echo count($leaveRequests); ?></span> of <span class="font-medium"><?php echo count($leaveRequests); ?></span> results
+                        <div id="pagination-info" class="text-sm text-gray-700">
+                            Loading...
                         </div>
-                        <div class="flex space-x-1">
-                            <button class="px-3 py-2 text-sm leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100">Previous</button>
-                            <button class="px-3 py-2 text-sm leading-tight text-white bg-primary border border-primary hover:bg-blue-700">1</button>
-                            <button class="px-3 py-2 text-sm leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100">Next</button>
+                        <div id="pagination-buttons" class="flex space-x-1">
+                            <!-- Pagination buttons will be populated by JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -383,8 +206,7 @@ if ($_POST) {
             <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="closeModal('apply-leave-modal')"></div>
 
             <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-                <form method="POST" action="">
-                    <input type="hidden" name="action" value="apply_leave">
+                <form id="apply-leave-form" onsubmit="submitLeaveApplication(event)">
                     <div class="bg-white px-6 pt-6 pb-4">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg leading-6 font-medium text-gray-900">Apply for Leave</h3>
@@ -394,13 +216,12 @@ if ($_POST) {
                         </div>
 
                         <div class="space-y-4">
+                            <input type="hidden" id="employee-id-input" name="employee_id" value="">
+
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Leave Type</label>
-                                <select name="leave_type" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                <select id="leave-type-select" name="leave_type" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
                                     <option value="">Select Leave Type</option>
-                                    <?php foreach ($leaveTypes as $type): ?>
-                                    <option value="<?php echo $type['id']; ?>"><?php echo htmlspecialchars($type['name']); ?> (<?php echo $type['days_allowed']; ?> days allowed)</option>
-                                    <?php endforeach; ?>
                                 </select>
                             </div>
 
@@ -446,20 +267,391 @@ if ($_POST) {
     <?php include 'includes/scripts.php'; ?>
 
     <script>
-        // Initialize search functionality
-        initializeSearch('leave-table', 'leave-search');
+        // Global variables
+        let currentPage = 1;
+        let currentFilters = {};
+        let leaveTypes = [];
+        let currentUserEmployeeId = null;
 
-        // Leave management functions
-        function viewLeaveDetails(id) {
-            // Implementation for viewing leave details
-            console.log('View leave details for ID:', id);
-            // This would typically open a detailed modal or navigate to a detail page
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLeaveTypes();
+            loadLeaveBalance();
+            loadLeaveRequests();
+            getCurrentUserEmployeeId();
+            setupEventListeners();
+        });
+
+        // Get current user's employee ID
+        async function getCurrentUserEmployeeId() {
+            try {
+                const response = await fetch('../api/employees.php');
+                const result = await response.json();
+
+                if (result.success && result.data.employees.length > 0) {
+                    // Find current user's employee record
+                    const currentUser = result.data.employees[0]; // Simplified - in real app, filter by current user
+                    currentUserEmployeeId = currentUser.id;
+                    document.getElementById('employee-id-input').value = currentUserEmployeeId;
+                }
+            } catch (error) {
+                console.error('Error getting current user employee ID:', error);
+            }
         }
 
-        // Auto-calculate days when dates change
-        document.querySelector('input[name="start_date"]').addEventListener('change', calculateLeaveDays);
-        document.querySelector('input[name="end_date"]').addEventListener('change', calculateLeaveDays);
+        // Load leave types
+        async function loadLeaveTypes() {
+            try {
+                const response = await fetch('../api/leaves.php?action=types');
+                const result = await response.json();
 
+                if (result.success) {
+                    leaveTypes = result.data;
+                    populateLeaveTypeSelects();
+                }
+            } catch (error) {
+                console.error('Error loading leave types:', error);
+            }
+        }
+
+        // Populate leave type select elements
+        function populateLeaveTypeSelects() {
+            const modalSelect = document.getElementById('leave-type-select');
+            const filterSelect = document.getElementById('leave-type-filter');
+
+            // Clear existing options (except first)
+            modalSelect.innerHTML = '<option value="">Select Leave Type</option>';
+            filterSelect.innerHTML = '<option value="">All Types</option>';
+
+            leaveTypes.forEach(type => {
+                modalSelect.innerHTML += `<option value="${type.id}">${type.leave_name} (${type.max_days_per_year} days max)</option>`;
+                filterSelect.innerHTML += `<option value="${type.id}">${type.leave_name}</option>`;
+            });
+        }
+
+        // Load leave balance
+        async function loadLeaveBalance() {
+            try {
+                const response = await fetch('../api/leaves.php?action=balance');
+                const result = await response.json();
+
+                if (result.success) {
+                    renderLeaveBalanceCards(result.data.balances);
+                }
+            } catch (error) {
+                console.error('Error loading leave balance:', error);
+                document.getElementById('leave-balance-cards').innerHTML =
+                    '<div class="col-span-full text-center text-red-600">Error loading leave balance</div>';
+            }
+        }
+
+        // Render leave balance cards
+        function renderLeaveBalanceCards(balances) {
+            const container = document.getElementById('leave-balance-cards');
+            const colors = ['blue', 'green', 'purple', 'red', 'yellow', 'indigo'];
+
+            container.innerHTML = balances.map((balance, index) => {
+                const color = colors[index % colors.length];
+                const percentage = balance.max_days_per_year > 0 ? (balance.remaining_days / balance.max_days_per_year) * 100 : 0;
+
+                return `
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-medium text-gray-600">${balance.leave_name}</h3>
+                            <div class="w-3 h-3 bg-${color}-500 rounded-full"></div>
+                        </div>
+                        <div class="flex items-baseline">
+                            <p class="text-2xl font-bold text-gray-900">${balance.remaining_days}</p>
+                            <p class="text-sm text-gray-500 ml-1">/ ${balance.max_days_per_year} days</p>
+                        </div>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-${color}-500 h-2 rounded-full" style="width: ${percentage}%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">${balance.used_days} days used</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Load leave requests
+        async function loadLeaveRequests(page = 1, filters = {}) {
+            try {
+                const params = new URLSearchParams({
+                    page: page,
+                    limit: 25,
+                    ...filters
+                });
+
+                const response = await fetch(`../api/leaves.php?${params}`);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderLeaveRequestsTable(result.data.leaves);
+                    renderPagination(result.data.pagination);
+                    updateSummaryStats(result.data.leaves);
+                    document.getElementById('requests-count').textContent =
+                        `${result.data.pagination.total} requests found`;
+                }
+            } catch (error) {
+                console.error('Error loading leave requests:', error);
+                document.getElementById('leave-table-body').innerHTML =
+                    '<tr><td colspan="9" class="px-6 py-8 text-center text-red-600">Error loading leave requests</td></tr>';
+            }
+        }
+
+        // Render leave requests table
+        function renderLeaveRequestsTable(leaves) {
+            const tbody = document.getElementById('leave-table-body');
+
+            if (leaves.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">No leave requests found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = leaves.map(leave => {
+                const statusClass = getStatusClass(leave.status);
+                const canApproveReject = leave.status === 'Pending';
+                const canCancel = leave.status === 'Approved' && new Date(leave.start_date) > new Date();
+
+                return `
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gray-300 rounded-full mr-3 flex items-center justify-center">
+                                    <i class="fas fa-user text-gray-600"></i>
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${leave.employee_name}</div>
+                                    <div class="text-gray-500">${leave.emp_id}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                ${leave.leave_name}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">${formatDate(leave.start_date)}</td>
+                        <td class="px-6 py-4">${formatDate(leave.end_date)}</td>
+                        <td class="px-6 py-4 font-medium">${leave.total_days} day${leave.total_days > 1 ? 's' : ''}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-gray-600" title="${leave.reason}">
+                                ${leave.reason.length > 30 ? leave.reason.substring(0, 30) + '...' : leave.reason}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="${statusClass} text-xs font-medium px-2.5 py-0.5 rounded">
+                                ${leave.status}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">${formatDate(leave.applied_date)}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-800" title="View Details" onclick="viewLeaveDetails(${leave.id})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                ${canApproveReject ? `
+                                    <button class="text-green-600 hover:text-green-800" title="Approve" onclick="approveLeave(${leave.id})">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="text-red-600 hover:text-red-800" title="Reject" onclick="rejectLeave(${leave.id})">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                ` : ''}
+                                ${canCancel ? `
+                                    <button class="text-orange-600 hover:text-orange-800" title="Cancel" onclick="cancelLeave(${leave.id})">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Update summary statistics
+        function updateSummaryStats(leaves) {
+            const stats = leaves.reduce((acc, leave) => {
+                acc.total++;
+                acc[leave.status.toLowerCase()] = (acc[leave.status.toLowerCase()] || 0) + 1;
+                return acc;
+            }, { total: 0, pending: 0, approved: 0, rejected: 0, cancelled: 0 });
+
+            document.getElementById('total-requests').textContent = stats.total;
+            document.getElementById('pending-requests').textContent = stats.pending;
+            document.getElementById('approved-requests').textContent = stats.approved;
+            document.getElementById('rejected-requests').textContent = stats.rejected;
+        }
+
+        // Helper functions
+        function getStatusClass(status) {
+            switch (status) {
+                case 'Approved': return 'bg-green-100 text-green-800';
+                case 'Rejected': return 'bg-red-100 text-red-800';
+                case 'Cancelled': return 'bg-gray-100 text-gray-800';
+                default: return 'bg-yellow-100 text-yellow-800';
+            }
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Event listeners
+        function setupEventListeners() {
+            // Filter events
+            document.getElementById('leave-type-filter').addEventListener('change', applyFilters);
+            document.getElementById('status-filter').addEventListener('change', applyFilters);
+            document.getElementById('leave-search').addEventListener('input', debounce(applyFilters, 300));
+
+            // Form date validation
+            document.querySelector('input[name="start_date"]').addEventListener('change', calculateLeaveDays);
+            document.querySelector('input[name="end_date"]').addEventListener('change', calculateLeaveDays);
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const filters = {
+                leave_type: document.getElementById('leave-type-filter').value,
+                status: document.getElementById('status-filter').value,
+                search: document.getElementById('leave-search').value
+            };
+
+            currentFilters = Object.fromEntries(
+                Object.entries(filters).filter(([_, value]) => value !== '')
+            );
+
+            currentPage = 1;
+            loadLeaveRequests(currentPage, currentFilters);
+        }
+
+        // Submit leave application
+        async function submitLeaveApplication(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+
+            const leaveData = {
+                employee_id: formData.get('employee_id'),
+                leave_type_id: formData.get('leave_type'),
+                start_date: formData.get('start_date'),
+                end_date: formData.get('end_date'),
+                reason: formData.get('reason')
+            };
+
+            try {
+                const response = await fetch('../api/leaves.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(leaveData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Leave application submitted successfully!', 'success');
+                    closeModal('apply-leave-modal');
+                    form.reset();
+                    loadLeaveRequests();
+                    loadLeaveBalance();
+                } else {
+                    showAlert(result.error || 'Failed to submit leave application', 'error');
+                }
+            } catch (error) {
+                console.error('Error submitting leave application:', error);
+                showAlert('Error submitting leave application', 'error');
+            }
+        }
+
+        // Leave action functions
+        async function approveLeave(leaveId) {
+            if (!confirm('Are you sure you want to approve this leave request?')) return;
+
+            try {
+                const response = await fetch(`../api/leaves.php?id=${leaveId}&action=approve`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notes: '' })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Leave request approved successfully!', 'success');
+                    loadLeaveRequests(currentPage, currentFilters);
+                } else {
+                    showAlert(result.error || 'Failed to approve leave request', 'error');
+                }
+            } catch (error) {
+                console.error('Error approving leave:', error);
+                showAlert('Error approving leave request', 'error');
+            }
+        }
+
+        async function rejectLeave(leaveId) {
+            const reason = prompt('Please provide a reason for rejection (optional):');
+            if (reason === null) return; // User cancelled
+
+            try {
+                const response = await fetch(`../api/leaves.php?id=${leaveId}&action=reject`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notes: reason })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Leave request rejected successfully!', 'success');
+                    loadLeaveRequests(currentPage, currentFilters);
+                } else {
+                    showAlert(result.error || 'Failed to reject leave request', 'error');
+                }
+            } catch (error) {
+                console.error('Error rejecting leave:', error);
+                showAlert('Error rejecting leave request', 'error');
+            }
+        }
+
+        async function cancelLeave(leaveId) {
+            if (!confirm('Are you sure you want to cancel this leave request?')) return;
+
+            try {
+                const response = await fetch(`../api/leaves.php?id=${leaveId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Leave request cancelled successfully!', 'success');
+                    loadLeaveRequests(currentPage, currentFilters);
+                    loadLeaveBalance();
+                } else {
+                    showAlert(result.error || 'Failed to cancel leave request', 'error');
+                }
+            } catch (error) {
+                console.error('Error cancelling leave:', error);
+                showAlert('Error cancelling leave request', 'error');
+            }
+        }
+
+        function viewLeaveDetails(leaveId) {
+            // TODO: Implement leave details modal
+            console.log('View leave details for ID:', leaveId);
+        }
+
+        // Calculate leave days
         function calculateLeaveDays() {
             const startDate = document.querySelector('input[name="start_date"]').value;
             const endDate = document.querySelector('input[name="end_date"]').value;
@@ -471,8 +663,6 @@ if ($_POST) {
                 if (end >= start) {
                     const timeDiff = end.getTime() - start.getTime();
                     const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
-
-                    // Display calculated days (you can add a field to show this)
                     console.log('Leave days calculated:', dayDiff);
                 } else {
                     alert('End date must be after start date');
@@ -481,53 +671,82 @@ if ($_POST) {
             }
         }
 
-        // Filter functionality
-        document.getElementById('leave-type-filter').addEventListener('change', filterTable);
-        document.getElementById('status-filter').addEventListener('change', filterTable);
+        // Pagination
+        function renderPagination(pagination) {
+            const container = document.getElementById('pagination-buttons');
+            const info = document.getElementById('pagination-info');
 
-        function filterTable() {
-            const leaveTypeFilter = document.getElementById('leave-type-filter').value;
-            const statusFilter = document.getElementById('status-filter').value;
-            const rows = document.querySelectorAll('#leave-table tbody tr');
+            info.textContent = `Showing ${((pagination.page - 1) * pagination.limit) + 1} to ${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total} results`;
 
-            rows.forEach(row => {
-                const leaveType = row.querySelector('[data-sort="leave_type"]').textContent.trim();
-                const status = row.querySelector('[data-sort="status"]').textContent.trim();
+            let buttons = '';
 
-                const leaveTypeMatch = !leaveTypeFilter || leaveType.includes(leaveTypeFilter);
-                const statusMatch = !statusFilter || status === statusFilter;
+            // Previous button
+            buttons += `
+                <button onclick="changePage(${pagination.page - 1})" ${pagination.page <= 1 ? 'disabled' : ''}
+                    class="px-3 py-2 text-sm leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 ${pagination.page <= 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                    Previous
+                </button>
+            `;
 
-                if (leaveTypeMatch && statusMatch) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+            // Page numbers
+            for (let i = Math.max(1, pagination.page - 2); i <= Math.min(pagination.totalPages, pagination.page + 2); i++) {
+                buttons += `
+                    <button onclick="changePage(${i})"
+                        class="px-3 py-2 text-sm leading-tight ${i === pagination.page ? 'text-white bg-primary border-primary' : 'text-gray-500 bg-white border-gray-300'} hover:bg-blue-700">
+                        ${i}
+                    </button>
+                `;
+            }
+
+            // Next button
+            buttons += `
+                <button onclick="changePage(${pagination.page + 1})" ${pagination.page >= pagination.totalPages ? 'disabled' : ''}
+                    class="px-3 py-2 text-sm leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 ${pagination.page >= pagination.totalPages ? 'opacity-50 cursor-not-allowed' : ''}">
+                    Next
+                </button>
+            `;
+
+            container.innerHTML = buttons;
         }
 
-        // Confirmation for approve/reject/cancel actions
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                const action = this.querySelector('input[name="action"]').value;
-                let confirmMessage = '';
+        function changePage(page) {
+            if (page < 1) return;
+            currentPage = page;
+            loadLeaveRequests(currentPage, currentFilters);
+        }
 
-                switch(action) {
-                    case 'approve_leave':
-                        confirmMessage = 'Are you sure you want to approve this leave request?';
-                        break;
-                    case 'reject_leave':
-                        confirmMessage = 'Are you sure you want to reject this leave request?';
-                        break;
-                    case 'cancel_leave':
-                        confirmMessage = 'Are you sure you want to cancel this leave request?';
-                        break;
-                }
+        // Utility functions
+        function showAlert(message, type = 'info') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertClass = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' :
+                              type === 'error' ? 'bg-red-100 border-red-400 text-red-700' :
+                              'bg-blue-100 border-blue-400 text-blue-700';
 
-                if (confirmMessage && !confirm(confirmMessage)) {
-                    e.preventDefault();
-                }
-            });
-        });
+            alertContainer.innerHTML = `
+                <div class="${alertClass} border px-4 py-3 rounded mb-4">
+                    ${message}
+                    <button type="button" class="float-right" onclick="this.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
     </script>
 </body>
 </html>

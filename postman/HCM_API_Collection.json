@@ -408,6 +408,346 @@
       ]
     },
     {
+      "name": "Leave Management",
+      "item": [
+        {
+          "name": "Get All Leave Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leaves?page=1&limit=25&employee_id=&status=&leave_type=&year=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number for pagination"
+                },
+                {
+                  "key": "limit",
+                  "value": "25",
+                  "description": "Number of records per page"
+                },
+                {
+                  "key": "employee_id",
+                  "value": "",
+                  "description": "Filter by employee ID"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter by status (Pending, Approved, Rejected, Cancelled)"
+                },
+                {
+                  "key": "leave_type",
+                  "value": "",
+                  "description": "Filter by leave type ID"
+                },
+                {
+                  "key": "year",
+                  "value": "",
+                  "description": "Filter by year"
+                }
+              ]
+            },
+            "description": "Get list of all leave requests with optional filters and pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Leave Request by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leaves?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Leave request ID"
+                }
+              ]
+            },
+            "description": "Get specific leave request details by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leaves?action=types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "types",
+                  "description": "Action to get leave types"
+                }
+              ]
+            },
+            "description": "Get all available leave types with their configurations."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Leave Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leaves?action=balance&employee_id=",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "balance",
+                  "description": "Action to get leave balance"
+                },
+                {
+                  "key": "employee_id",
+                  "value": "",
+                  "description": "Employee ID (optional, defaults to current user)"
+                }
+              ]
+            },
+            "description": "Get leave balance for an employee showing remaining days for each leave type."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Leave Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": 1,\n  \"leave_type_id\": 1,\n  \"start_date\": \"2024-03-15\",\n  \"end_date\": \"2024-03-17\",\n  \"reason\": \"Family vacation\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leaves",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ]
+            },
+            "description": "Create a new leave request."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Leave Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_date\": \"2024-03-16\",\n  \"end_date\": \"2024-03-18\",\n  \"reason\": \"Updated vacation dates\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leaves?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Leave request ID to update"
+                }
+              ]
+            },
+            "description": "Update an existing leave request (only pending requests can be updated)."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Leave Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Approved for team vacation period\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leaves?id=1&action=approve",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Leave request ID to approve"
+                },
+                {
+                  "key": "action",
+                  "value": "approve",
+                  "description": "Action to approve the leave request"
+                }
+              ]
+            },
+            "description": "Approve a pending leave request."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Leave Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Insufficient leave balance or conflict with business requirements\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leaves?id=1&action=reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Leave request ID to reject"
+                },
+                {
+                  "key": "action",
+                  "value": "reject",
+                  "description": "Action to reject the leave request"
+                }
+              ]
+            },
+            "description": "Reject a pending leave request with optional notes."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Leave Request",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leaves?id=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "leaves"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "1",
+                  "description": "Leave request ID to cancel"
+                }
+              ]
+            },
+            "description": "Cancel a leave request (marks as cancelled, only pending requests can be cancelled)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Reports",
       "item": [
         {
