@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"DESCRIBE departments;\")",
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"DESCRIBE positions;\")",
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"DESCRIBE employee_compensation;\")",
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"SELECT u.id, u.username, u.email, u.is_active, u.last_login, r.role_name, r.permissions, e.employee_id, e.first_name, e.middle_name, e.last_name, e.email as employee_email, e.phone, e.date_of_birth, e.address, e.city, e.state, e.zip_code, e.country, e.hire_date, e.employment_status, e.employee_type, e.emergency_contact_name, e.emergency_contact_phone, e.emergency_contact_relationship, d.dept_name as department_name, p.position_title, ec.basic_salary FROM users u LEFT JOIN roles r ON u.role_id = r.id LEFT JOIN employees e ON u.id = e.user_id LEFT JOIN departments d ON e.department_id = d.id LEFT JOIN positions p ON e.position_id = p.id LEFT JOIN employee_compensation ec ON e.id = ec.employee_id AND ec.is_active = 1 WHERE u.id = 1;\")",
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"DESCRIBE employee_leaves;\")",
+      "Bash(\"C:\\xampp\\mysql\\bin\\mysql.exe\" -u root hcm_system -e \"DESCRIBE employee_insurance;\")",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

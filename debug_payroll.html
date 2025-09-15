@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Payroll API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">Debug Payroll API</h1>
+
+        <div class="bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-xl font-semibold mb-4">API Test Results</h2>
+            <div id="results" class="space-y-4"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <h2 class="text-xl font-semibold mb-4">Test Buttons</h2>
+            <div class="space-x-4">
+                <button onclick="testGetSummary()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Test Get Summary
+                </button>
+                <button onclick="testGetRecords()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                    Test Get Records
+                </button>
+                <button onclick="testUpdateRecord()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                    Test Update Record
+                </button>
+                <button onclick="clearResults()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                    Clear Results
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PayrollAPI Class
+        class PayrollAPI {
+            constructor(baseUrl = '/HCM/api/payroll.php') {
+                this.baseUrl = baseUrl;
+            }
+
+            async request(endpoint, method = 'GET', data = null) {
+                const url = `${this.baseUrl}?path=${endpoint}`;
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (data && (method === 'POST' || method === 'PUT')) {
+                    options.body = JSON.stringify(data);
+                }
+
+                try {
+                    console.log('Making request to:', url, 'with options:', options);
+                    const response = await fetch(url, options);
+                    console.log('Response status:', response.status);
+
+                    const text = await response.text();
+                    console.log('Response text:', text);
+
+                    let result;
+                    try {
+                        result = JSON.parse(text);
+                    } catch (e) {
+                        result = { error: 'Invalid JSON response: ' + text };
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+                    }
+
+                    return result;
+                } catch (error) {
+                    console.error('API Request failed:', error);
+                    throw error;
+                }
+            }
+
+            async getPayrollSummary() {
+                return this.request('summary');
+            }
+
+            async getPayrollRecords(limit = 50, offset = 0) {
+                return this.request(`records&limit=${limit}&offset=${offset}`);
+            }
+
+            async updatePayrollRecord(employeeId, updates) {
+                return this.request('update', 'PUT', {
+                    employee_id: employeeId,
+                    updates: updates
+                });
+            }
+        }
+
+        const payrollAPI = new PayrollAPI();
+
+        function addResult(title, data, isError = false) {
+            const resultsDiv = document.getElementById('results');
+            const resultElement = document.createElement('div');
+            resultElement.className = `p-4 rounded border ${isError ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`;
+
+            resultElement.innerHTML = `
+                <h3 class="font-semibold ${isError ? 'text-red-800' : 'text-green-800'}">${title}</h3>
+                <pre class="mt-2 text-sm overflow-auto">${JSON.stringify(data, null, 2)}</pre>
+            `;
+
+            resultsDiv.appendChild(resultElement);
+        }
+
+        async function testGetSummary() {
+            try {
+                const result = await payrollAPI.getPayrollSummary();
+                addResult('Get Summary - SUCCESS', result);
+            } catch (error) {
+                addResult('Get Summary - ERROR', { error: error.message }, true);
+            }
+        }
+
+        async function testGetRecords() {
+            try {
+                const result = await payrollAPI.getPayrollRecords();
+                addResult('Get Records - SUCCESS', result);
+            } catch (error) {
+                addResult('Get Records - ERROR', { error: error.message }, true);
+            }
+        }
+
+        async function testUpdateRecord() {
+            try {
+                const result = await payrollAPI.updatePayrollRecord('EMP001', {
+                    basic_salary: 75000
+                });
+                addResult('Update Record - SUCCESS', result);
+            } catch (error) {
+                addResult('Update Record - ERROR', { error: error.message }, true);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
