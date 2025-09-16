@@ -147,8 +147,162 @@ function initializeDataTable() {
     });
 }
 
+// Global search functionality
+function initializeGlobalSearch() {
+    const searchInput = document.getElementById('globalSearch');
+    const searchResults = document.getElementById('searchResults');
+    const searchContent = document.getElementById('searchContent');
+    const searchLoading = document.getElementById('searchLoading');
+    let searchTimeout;
+
+    if (!searchInput) return; // Exit if search input doesn't exist
+
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+
+        clearTimeout(searchTimeout);
+
+        if (query.length < 2) {
+            hideSearchResults();
+            return;
+        }
+
+        // Show loading
+        searchLoading.classList.remove('hidden');
+        searchResults.classList.add('hidden');
+
+        searchTimeout = setTimeout(() => {
+            performSearch(query);
+        }, 300); // Debounce for 300ms
+    });
+
+    searchInput.addEventListener('blur', function() {
+        // Hide results after a short delay to allow clicking on results
+        setTimeout(() => {
+            hideSearchResults();
+        }, 200);
+    });
+
+    searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 2) {
+            searchResults.classList.remove('hidden');
+        }
+    });
+
+    async function performSearch(query) {
+        try {
+            const response = await fetch(`../api/search.php?q=${encodeURIComponent(query)}&limit=10`);
+            const data = await response.json();
+
+            searchLoading.classList.add('hidden');
+
+            if (data.success) {
+                displaySearchResults(data.data);
+            } else {
+                displayError('Search failed');
+            }
+        } catch (error) {
+            searchLoading.classList.add('hidden');
+            displayError('Search error');
+            console.error('Search error:', error);
+        }
+    }
+
+    function displaySearchResults(results) {
+        let html = '';
+
+        if (results.total === 0) {
+            html = '<div class="p-3 text-gray-500 text-sm">No results found</div>';
+        } else {
+            // Employees section
+            if (results.employees.length > 0) {
+                html += '<div class="border-b border-gray-100 pb-2 mb-2"><div class="text-xs font-semibold text-gray-500 uppercase tracking-wide px-2 py-1">Employees</div>';
+                results.employees.forEach(employee => {
+                    html += `
+                        <a href="employees.php?id=${employee.id}" class="block px-3 py-2 hover:bg-gray-50 rounded-md">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-user text-blue-600 text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${employee.first_name} ${employee.last_name}</div>
+                                    <div class="text-sm text-gray-500">${employee.position_title || ''} ${employee.dept_name ? '• ' + employee.dept_name : ''}</div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Departments section
+            if (results.departments.length > 0) {
+                html += '<div class="border-b border-gray-100 pb-2 mb-2"><div class="text-xs font-semibold text-gray-500 uppercase tracking-wide px-2 py-1">Departments</div>';
+                results.departments.forEach(dept => {
+                    html += `
+                        <a href="employees.php?dept=${dept.id}" class="block px-3 py-2 hover:bg-gray-50 rounded-md">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-building text-green-600 text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${dept.name}</div>
+                                    <div class="text-sm text-gray-500">${dept.description || 'Department'}</div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            // Positions section
+            if (results.positions.length > 0) {
+                html += '<div><div class="text-xs font-semibold text-gray-500 uppercase tracking-wide px-2 py-1">Positions</div>';
+                results.positions.forEach(position => {
+                    html += `
+                        <a href="employees.php?position=${position.id}" class="block px-3 py-2 hover:bg-gray-50 rounded-md">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-briefcase text-purple-600 text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="font-medium text-gray-900">${position.name}</div>
+                                    <div class="text-sm text-gray-500">Position</div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+                html += '</div>';
+            }
+        }
+
+        searchContent.innerHTML = html;
+        searchResults.classList.remove('hidden');
+    }
+
+    function displayError(message) {
+        searchContent.innerHTML = `<div class="p-3 text-red-500 text-sm">${message}</div>`;
+        searchResults.classList.remove('hidden');
+    }
+
+    function hideSearchResults() {
+        searchResults.classList.add('hidden');
+        searchLoading.classList.add('hidden');
+    }
+
+    // Hide search results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            hideSearchResults();
+        }
+    });
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     initializeDataTable();
+    initializeGlobalSearch();
 });
 </script>

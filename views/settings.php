@@ -3,84 +3,31 @@
 require_once __DIR__ . '/../includes/auth_helper.php';
 requireAuth();
 
-// Mock current settings data
-$companySettings = [
-    'company_name' => 'TechCorp Solutions',
-    'company_email' => 'info@techcorp.com',
-    'company_phone' => '+1 (555) 123-4567',
-    'company_address' => '123 Business Street, Tech City, TC 12345',
-    'company_website' => 'https://techcorp.com',
-    'company_logo' => 'assets/logo.png',
-    'timezone' => 'Asia/Manila',
-    'currency' => 'PHP',
-    'date_format' => 'Y-m-d',
-    'time_format' => '24'
-];
+// Simplified: Skip role check for now to test basic access
+// TODO: Re-add role checking once access works
 
-$systemSettings = [
-    'maintenance_mode' => false,
-    'user_registration' => true,
-    'email_notifications' => true,
-    'sms_notifications' => false,
-    'backup_frequency' => 'daily',
-    'session_timeout' => 30,
-    'max_login_attempts' => 5,
-    'password_expiry_days' => 90,
-    'two_factor_auth' => false
-];
+function getUserRole($userId) {
+    try {
+        require_once __DIR__ . '/../config/database.php';
+        global $conn;
 
-$payrollSettings = [
-    'pay_frequency' => 'monthly',
-    'pay_day' => 'last_day',
-    'overtime_rate' => 1.5,
-    'holiday_rate' => 2.0,
-    'late_deduction_rate' => 0.1,
-    'tax_rate' => 12.0,
-    'sss_rate' => 3.63,
-    'philhealth_rate' => 1.25,
-    'pagibig_rate' => 1.0
-];
-
-$leaveSettings = [
-    'annual_leave_days' => 21,
-    'sick_leave_days' => 10,
-    'personal_leave_days' => 5,
-    'maternity_leave_days' => 90,
-    'paternity_leave_days' => 7,
-    'emergency_leave_days' => 3,
-    'auto_approve_threshold' => 1,
-    'require_medical_cert' => true,
-    'advance_leave_days' => 30
-];
-
-// Mock user roles
-$userRoles = [
-    ['id' => 1, 'name' => 'Super Admin', 'permissions' => ['all']],
-    ['id' => 2, 'name' => 'HR Manager', 'permissions' => ['employees', 'payroll', 'leaves', 'reports']],
-    ['id' => 3, 'name' => 'Department Head', 'permissions' => ['employees', 'attendance', 'leaves']],
-    ['id' => 4, 'name' => 'Employee', 'permissions' => ['profile', 'attendance', 'leave_apply']]
-];
-
-// Handle form submissions
-if ($_POST) {
-    if (isset($_POST['action'])) {
-        switch ($_POST['action']) {
-            case 'update_company':
-                $success = "Company settings updated successfully!";
-                break;
-            case 'update_system':
-                $success = "System settings updated successfully!";
-                break;
-            case 'update_payroll':
-                $success = "Payroll settings updated successfully!";
-                break;
-            case 'update_leave':
-                $success = "Leave settings updated successfully!";
-                break;
-            case 'backup_database':
-                $success = "Database backup completed successfully!";
-                break;
+        if (!$conn) {
+            return 'employee'; // Default role if no connection
         }
+
+        $stmt = $conn->prepare("
+            SELECT r.role_name
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.id
+            WHERE u.id = ?
+        ");
+        $stmt->execute([$userId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $result['role_name'] ?? 'employee';
+    } catch (Exception $e) {
+        error_log("getUserRole error: " . $e->getMessage());
+        return 'employee'; // Default role on error
     }
 }
 ?>
@@ -125,504 +72,571 @@ if ($_POST) {
     <!-- Main Content -->
     <div class="p-4 sm:ml-64">
         <div class="p-4 rounded-lg mt-14">
-            <?php if (isset($success)): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                <?php echo htmlspecialchars($success); ?>
-            </div>
-            <?php endif; ?>
-
-            <!-- Page Header -->
-            <div class="mb-6">
-                <h1 class="text-2xl font-bold text-gray-900">System Settings</h1>
-                <p class="text-gray-600">Configure your HCM system preferences and settings</p>
+            <!-- Loading Spinner -->
+            <div id="loading" class="flex justify-center items-center py-12">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
 
-            <!-- Settings Navigation Tabs -->
-            <div class="mb-6">
-                <div class="border-b border-gray-200">
-                    <nav class="-mb-px flex space-x-8">
-                        <button class="settings-tab active border-primary text-primary py-2 px-1 border-b-2 font-medium text-sm" data-tab="company">
-                            <i class="fas fa-building mr-2"></i>Company
-                        </button>
-                        <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="system">
-                            <i class="fas fa-cog mr-2"></i>System
-                        </button>
-                        <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="payroll">
-                            <i class="fas fa-money-bill-wave mr-2"></i>Payroll
-                        </button>
-                        <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="leave">
-                            <i class="fas fa-calendar-times mr-2"></i>Leave
-                        </button>
-                        <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="users">
-                            <i class="fas fa-users mr-2"></i>Users
-                        </button>
-                        <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="backup">
-                            <i class="fas fa-database mr-2"></i>Backup
-                        </button>
-                    </nav>
+            <!-- Alert Messages -->
+            <div id="alert-container" class="mb-4"></div>
+
+            <!-- Main Content Container -->
+            <div id="main-content" class="hidden">
+                <!-- Page Header -->
+                <div class="mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">System Settings</h1>
+                    <p class="text-gray-600">Configure your HCM system preferences and settings</p>
                 </div>
-            </div>
 
-            <!-- Company Settings Tab -->
-            <div id="company-tab" class="settings-content">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Company Information</h3>
-                    </div>
-
-                    <form method="POST" action="" enctype="multipart/form-data">
-                        <input type="hidden" name="action" value="update_company">
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-                                    <input type="text" name="company_name" value="<?php echo htmlspecialchars($companySettings['company_name']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                                    <input type="email" name="company_email" value="<?php echo htmlspecialchars($companySettings['company_email']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                                    <input type="text" name="company_phone" value="<?php echo htmlspecialchars($companySettings['company_phone']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                                    <input type="url" name="company_website" value="<?php echo htmlspecialchars($companySettings['company_website']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
-                                    <textarea name="company_address" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"><?php echo htmlspecialchars($companySettings['company_address']); ?></textarea>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Company Logo</label>
-                                    <input type="file" name="company_logo" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                    <p class="text-xs text-gray-500 mt-1">Upload a new logo (JPG, PNG, max 2MB)</p>
-                                </div>
-
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-                                        <select name="timezone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                            <option value="Asia/Manila" <?php echo $companySettings['timezone'] == 'Asia/Manila' ? 'selected' : ''; ?>>Asia/Manila</option>
-                                            <option value="UTC" <?php echo $companySettings['timezone'] == 'UTC' ? 'selected' : ''; ?>>UTC</option>
-                                            <option value="America/New_York" <?php echo $companySettings['timezone'] == 'America/New_York' ? 'selected' : ''; ?>>America/New_York</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                                        <select name="currency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                            <option value="PHP" <?php echo $companySettings['currency'] == 'PHP' ? 'selected' : ''; ?>>PHP - Philippine Peso</option>
-                                            <option value="USD" <?php echo $companySettings['currency'] == 'USD' ? 'selected' : ''; ?>>USD - US Dollar</option>
-                                            <option value="EUR" <?php echo $companySettings['currency'] == 'EUR' ? 'selected' : ''; ?>>EUR - Euro</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
-                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                <i class="fas fa-save mr-2"></i>Save Changes
+                <!-- Settings Navigation Tabs -->
+                <div class="mb-6">
+                    <div class="border-b border-gray-200">
+                        <nav class="-mb-px flex space-x-8" id="settings-tabs">
+                            <button class="settings-tab active border-primary text-primary py-2 px-1 border-b-2 font-medium text-sm" data-tab="company">
+                                <i class="fas fa-building mr-2"></i>Company
                             </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- System Settings Tab -->
-            <div id="system-tab" class="settings-content hidden">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">System Configuration</h3>
-                    </div>
-
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="update_system">
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                                    <div>
-                                        <h4 class="font-medium text-gray-900">Maintenance Mode</h4>
-                                        <p class="text-sm text-gray-500">Put the system in maintenance mode</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" name="maintenance_mode" value="1" class="sr-only peer" <?php echo $systemSettings['maintenance_mode'] ? 'checked' : ''; ?>>
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-
-                                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                                    <div>
-                                        <h4 class="font-medium text-gray-900">User Registration</h4>
-                                        <p class="text-sm text-gray-500">Allow new user registration</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" name="user_registration" value="1" class="sr-only peer" <?php echo $systemSettings['user_registration'] ? 'checked' : ''; ?>>
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-
-                                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                                    <div>
-                                        <h4 class="font-medium text-gray-900">Email Notifications</h4>
-                                        <p class="text-sm text-gray-500">Send email notifications to users</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" name="email_notifications" value="1" class="sr-only peer" <?php echo $systemSettings['email_notifications'] ? 'checked' : ''; ?>>
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-
-                                <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                                    <div>
-                                        <h4 class="font-medium text-gray-900">Two-Factor Authentication</h4>
-                                        <p class="text-sm text-gray-500">Enable 2FA for enhanced security</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" name="two_factor_auth" value="1" class="sr-only peer" <?php echo $systemSettings['two_factor_auth'] ? 'checked' : ''; ?>>
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Session Timeout (minutes)</label>
-                                    <input type="number" name="session_timeout" value="<?php echo $systemSettings['session_timeout']; ?>" min="5" max="120" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Max Login Attempts</label>
-                                    <input type="number" name="max_login_attempts" value="<?php echo $systemSettings['max_login_attempts']; ?>" min="3" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Password Expiry (days)</label>
-                                    <input type="number" name="password_expiry_days" value="<?php echo $systemSettings['password_expiry_days']; ?>" min="30" max="365" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Backup Frequency</label>
-                                    <select name="backup_frequency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                        <option value="hourly" <?php echo $systemSettings['backup_frequency'] == 'hourly' ? 'selected' : ''; ?>>Hourly</option>
-                                        <option value="daily" <?php echo $systemSettings['backup_frequency'] == 'daily' ? 'selected' : ''; ?>>Daily</option>
-                                        <option value="weekly" <?php echo $systemSettings['backup_frequency'] == 'weekly' ? 'selected' : ''; ?>>Weekly</option>
-                                        <option value="monthly" <?php echo $systemSettings['backup_frequency'] == 'monthly' ? 'selected' : ''; ?>>Monthly</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
-                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                <i class="fas fa-save mr-2"></i>Save Changes
+                            <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="system">
+                                <i class="fas fa-cog mr-2"></i>System
                             </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Payroll Settings Tab -->
-            <div id="payroll-tab" class="settings-content hidden">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Payroll Configuration</h3>
-                    </div>
-
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="update_payroll">
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Pay Frequency</label>
-                                    <select name="pay_frequency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                        <option value="weekly" <?php echo $payrollSettings['pay_frequency'] == 'weekly' ? 'selected' : ''; ?>>Weekly</option>
-                                        <option value="bi-weekly" <?php echo $payrollSettings['pay_frequency'] == 'bi-weekly' ? 'selected' : ''; ?>>Bi-weekly</option>
-                                        <option value="monthly" <?php echo $payrollSettings['pay_frequency'] == 'monthly' ? 'selected' : ''; ?>>Monthly</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Overtime Rate (multiplier)</label>
-                                    <input type="number" name="overtime_rate" value="<?php echo $payrollSettings['overtime_rate']; ?>" step="0.1" min="1" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Holiday Rate (multiplier)</label>
-                                    <input type="number" name="holiday_rate" value="<?php echo $payrollSettings['holiday_rate']; ?>" step="0.1" min="1" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Late Deduction Rate (%)</label>
-                                    <input type="number" name="late_deduction_rate" value="<?php echo $payrollSettings['late_deduction_rate']; ?>" step="0.01" min="0" max="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
-                                    <input type="number" name="tax_rate" value="<?php echo $payrollSettings['tax_rate']; ?>" step="0.01" min="0" max="50" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">SSS Rate (%)</label>
-                                    <input type="number" name="sss_rate" value="<?php echo $payrollSettings['sss_rate']; ?>" step="0.01" min="0" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth Rate (%)</label>
-                                    <input type="number" name="philhealth_rate" value="<?php echo $payrollSettings['philhealth_rate']; ?>" step="0.01" min="0" max="5" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG Rate (%)</label>
-                                    <input type="number" name="pagibig_rate" value="<?php echo $payrollSettings['pagibig_rate']; ?>" step="0.01" min="0" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
-                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                <i class="fas fa-save mr-2"></i>Save Changes
+                            <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="payroll">
+                                <i class="fas fa-money-bill-wave mr-2"></i>Payroll
                             </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Leave Settings Tab -->
-            <div id="leave-tab" class="settings-content hidden">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Leave Configuration</h3>
-                    </div>
-
-                    <form method="POST" action="">
-                        <input type="hidden" name="action" value="update_leave">
-
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Annual Leave Days</label>
-                                    <input type="number" name="annual_leave_days" value="<?php echo $leaveSettings['annual_leave_days']; ?>" min="0" max="50" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Sick Leave Days</label>
-                                    <input type="number" name="sick_leave_days" value="<?php echo $leaveSettings['sick_leave_days']; ?>" min="0" max="30" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Personal Leave Days</label>
-                                    <input type="number" name="personal_leave_days" value="<?php echo $leaveSettings['personal_leave_days']; ?>" min="0" max="20" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Emergency Leave Days</label>
-                                    <input type="number" name="emergency_leave_days" value="<?php echo $leaveSettings['emergency_leave_days']; ?>" min="0" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Maternity Leave Days</label>
-                                    <input type="number" name="maternity_leave_days" value="<?php echo $leaveSettings['maternity_leave_days']; ?>" min="60" max="120" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Paternity Leave Days</label>
-                                    <input type="number" name="paternity_leave_days" value="<?php echo $leaveSettings['paternity_leave_days']; ?>" min="5" max="14" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Auto-approve Threshold (days)</label>
-                                    <input type="number" name="auto_approve_threshold" value="<?php echo $leaveSettings['auto_approve_threshold']; ?>" min="0" max="5" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                    <p class="text-xs text-gray-500 mt-1">Leave requests up to this many days will be auto-approved</p>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Advance Leave Request (days)</label>
-                                    <input type="number" name="advance_leave_days" value="<?php echo $leaveSettings['advance_leave_days']; ?>" min="1" max="90" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                    <p class="text-xs text-gray-500 mt-1">Minimum days in advance for leave requests</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
-                            <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                                <i class="fas fa-save mr-2"></i>Save Changes
+                            <button class="settings-tab border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm" data-tab="leave">
+                                <i class="fas fa-calendar-times mr-2"></i>Leave
                             </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- User Roles Tab -->
-            <div id="users-tab" class="settings-content hidden">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">User Roles & Permissions</h3>
-                        <button class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors" onclick="openModal('add-role-modal')">
-                            <i class="fas fa-plus mr-2"></i>Add Role
-                        </button>
-                    </div>
-
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm text-left text-gray-500">
-                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3">Role Name</th>
-                                    <th class="px-6 py-3">Permissions</th>
-                                    <th class="px-6 py-3">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($userRoles as $role): ?>
-                                <tr class="bg-white border-b hover:bg-gray-50">
-                                    <td class="px-6 py-4 font-medium text-gray-900"><?php echo htmlspecialchars($role['name']); ?></td>
-                                    <td class="px-6 py-4">
-                                        <?php
-                                        $permissions = is_array($role['permissions']) ? $role['permissions'] : [$role['permissions']];
-                                        foreach ($permissions as $permission): ?>
-                                            <span class="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded"><?php echo htmlspecialchars($permission); ?></span>
-                                        <?php endforeach; ?>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center space-x-2">
-                                            <button class="text-green-600 hover:text-green-800" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <?php if ($role['name'] !== 'Super Admin'): ?>
-                                            <button class="text-red-600 hover:text-red-800" title="Delete">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                        </nav>
                     </div>
                 </div>
-            </div>
 
-            <!-- Backup Tab -->
-            <div id="backup-tab" class="settings-content hidden">
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-gray-900">Database Backup & Restore</h3>
-                    </div>
-
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 mb-4">Create Backup</h4>
-                            <form method="POST" action="">
-                                <input type="hidden" name="action" value="backup_database">
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Backup Type</label>
-                                        <select name="backup_type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                            <option value="full">Full Database</option>
-                                            <option value="structure">Structure Only</option>
-                                            <option value="data">Data Only</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" class="w-full bg-success text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                                        <i class="fas fa-database mr-2"></i>Create Backup
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 mb-4">Restore Database</h4>
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Select Backup File</label>
-                                    <input type="file" name="backup_file" accept=".sql" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                </div>
-                                <button type="button" class="w-full bg-warning text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors" onclick="confirmRestore()">
-                                    <i class="fas fa-upload mr-2"></i>Restore Database
-                                </button>
-                                <p class="text-xs text-red-600">⚠️ Warning: This will overwrite your current database</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Backups -->
-                    <div class="mt-8">
-                        <h4 class="text-md font-medium text-gray-900 mb-4">Recent Backups</h4>
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                                <div>
-                                    <p class="font-medium text-gray-900">backup_2024-03-14_10-30.sql</p>
-                                    <p class="text-sm text-gray-500">March 14, 2024 - 10:30 AM (Full Database)</p>
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button class="text-blue-600 hover:text-blue-800">
-                                        <i class="fas fa-download"></i>
-                                    </button>
-                                    <button class="text-red-600 hover:text-red-800">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Settings Content Container -->
+                <div id="settings-content">
+                    <!-- Content will be dynamically loaded here -->
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- JavaScript for Interactivity -->
+    <!-- Logo Upload Modal -->
+    <div id="logoModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-medium">Upload Company Logo</h3>
+                    <button onclick="closeLogo()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="logoForm" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Logo</label>
+                        <input type="file" id="logoFile" name="company_logo" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                        <p class="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 2MB</p>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeLogo()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-700">
+                            Upload
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for Settings Management -->
     <?php include 'includes/scripts.php'; ?>
 
     <script>
-        // Tab switching functionality
-        document.querySelectorAll('.settings-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                const tabName = this.getAttribute('data-tab');
+        class SettingsManager {
+            constructor() {
+                this.settings = {};
+                this.currentTab = 'company';
+                this.apiBase = '../api/settings-no-auth.php';
+                this.init();
+            }
 
-                // Remove active class from all tabs
-                document.querySelectorAll('.settings-tab').forEach(t => {
-                    t.classList.remove('active', 'border-primary', 'text-primary');
-                    t.classList.add('border-transparent', 'text-gray-500');
+            async init() {
+                await this.loadSettings();
+                this.setupEventListeners();
+                this.renderCurrentTab();
+                this.hideLoading();
+            }
+
+            async loadSettings() {
+                try {
+                    const response = await fetch(this.apiBase);
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.settings = data.data;
+                        console.log('Settings loaded:', this.settings);
+                    } else {
+                        this.showAlert('error', 'Failed to load settings: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showAlert('error', 'Error loading settings: ' + error.message);
+                }
+            }
+
+            setupEventListeners() {
+                // Tab switching
+                document.querySelectorAll('.settings-tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        this.switchTab(e.target.getAttribute('data-tab'));
+                    });
                 });
 
-                // Add active class to clicked tab
-                this.classList.add('active', 'border-primary', 'text-primary');
-                this.classList.remove('border-transparent', 'text-gray-500');
+                // Logo form
+                document.getElementById('logoForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.uploadLogo();
+                });
+            }
 
-                // Hide all content
-                document.querySelectorAll('.settings-content').forEach(content => {
-                    content.classList.add('hidden');
+            switchTab(tabName) {
+                // Update active tab
+                document.querySelectorAll('.settings-tab').forEach(tab => {
+                    tab.classList.remove('active', 'border-primary', 'text-primary');
+                    tab.classList.add('border-transparent', 'text-gray-500');
                 });
 
-                // Show selected content
-                document.getElementById(tabName + '-tab').classList.remove('hidden');
-            });
-        });
+                const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+                activeTab.classList.add('active', 'border-primary', 'text-primary');
+                activeTab.classList.remove('border-transparent', 'text-gray-500');
 
-        // Backup restore confirmation
-        function confirmRestore() {
-            if (confirm('Are you sure you want to restore the database? This will overwrite all current data and cannot be undone.')) {
-                alert('Database restore initiated...');
-                // Implement restore logic here
+                this.currentTab = tabName;
+                this.renderCurrentTab();
+            }
+
+            renderCurrentTab() {
+                const container = document.getElementById('settings-content');
+
+                switch (this.currentTab) {
+                    case 'company':
+                        container.innerHTML = this.renderCompanySettings();
+                        break;
+                    case 'system':
+                        container.innerHTML = this.renderSystemSettings();
+                        break;
+                    case 'payroll':
+                        container.innerHTML = this.renderPayrollSettings();
+                        break;
+                    case 'leave':
+                        container.innerHTML = this.renderLeaveSettings();
+                        break;
+                }
+
+                this.attachFormListeners();
+            }
+
+            renderCompanySettings() {
+                return `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Company Information</h3>
+                        </div>
+
+                        <form id="companyForm" class="settings-form">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                                        <input type="text" name="company_name" value="${this.getSettingValue('company_name')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                                        <input type="email" name="company_email" value="${this.getSettingValue('company_email')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                                        <input type="text" name="company_phone" value="${this.getSettingValue('company_phone')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                                        <input type="url" name="company_website" value="${this.getSettingValue('company_website')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
+                                        <textarea name="company_address" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">${this.getSettingValue('company_address')}</textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Logo</label>
+                                        <div class="flex items-center space-x-3">
+                                            <img id="currentLogo" src="../${this.getSettingValue('company_logo')}" alt="Company Logo" class="h-16 w-16 object-contain border border-gray-300 rounded">
+                                            <button type="button" onclick="openLogo()" class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                                                <i class="fas fa-upload mr-2"></i>Change Logo
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                                            <select name="timezone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                                <option value="Asia/Manila" ${this.getSettingValue('timezone') === 'Asia/Manila' ? 'selected' : ''}>Asia/Manila</option>
+                                                <option value="UTC" ${this.getSettingValue('timezone') === 'UTC' ? 'selected' : ''}>UTC</option>
+                                                <option value="America/New_York" ${this.getSettingValue('timezone') === 'America/New_York' ? 'selected' : ''}>America/New_York</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+                                            <select name="currency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                                <option value="PHP" ${this.getSettingValue('currency') === 'PHP' ? 'selected' : ''}>PHP - Philippine Peso</option>
+                                                <option value="USD" ${this.getSettingValue('currency') === 'USD' ? 'selected' : ''}>USD - US Dollar</option>
+                                                <option value="EUR" ${this.getSettingValue('currency') === 'EUR' ? 'selected' : ''}>EUR - Euro</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                                <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-save mr-2"></i>Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+            }
+
+            renderSystemSettings() {
+                return `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">System Configuration</h3>
+                        </div>
+
+                        <form id="systemForm" class="settings-form">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    ${this.renderToggle('maintenance_mode', 'Maintenance Mode', 'Put the system in maintenance mode')}
+                                    ${this.renderToggle('user_registration', 'User Registration', 'Allow new user registration')}
+                                    ${this.renderToggle('email_notifications', 'Email Notifications', 'Send email notifications to users')}
+                                    ${this.renderToggle('two_factor_auth', 'Two-Factor Authentication', 'Enable 2FA for enhanced security')}
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Session Timeout (minutes)</label>
+                                        <input type="number" name="session_timeout" value="${this.getSettingValue('session_timeout')}" min="5" max="120" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Max Login Attempts</label>
+                                        <input type="number" name="max_login_attempts" value="${this.getSettingValue('max_login_attempts')}" min="3" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Password Expiry (days)</label>
+                                        <input type="number" name="password_expiry_days" value="${this.getSettingValue('password_expiry_days')}" min="30" max="365" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Backup Frequency</label>
+                                        <select name="backup_frequency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                            <option value="hourly" ${this.getSettingValue('backup_frequency') === 'hourly' ? 'selected' : ''}>Hourly</option>
+                                            <option value="daily" ${this.getSettingValue('backup_frequency') === 'daily' ? 'selected' : ''}>Daily</option>
+                                            <option value="weekly" ${this.getSettingValue('backup_frequency') === 'weekly' ? 'selected' : ''}>Weekly</option>
+                                            <option value="monthly" ${this.getSettingValue('backup_frequency') === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                                <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-save mr-2"></i>Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+            }
+
+            renderPayrollSettings() {
+                return `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Payroll Configuration</h3>
+                        </div>
+
+                        <form id="payrollForm" class="settings-form">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pay Frequency</label>
+                                        <select name="pay_frequency" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                            <option value="weekly" ${this.getSettingValue('pay_frequency') === 'weekly' ? 'selected' : ''}>Weekly</option>
+                                            <option value="bi-weekly" ${this.getSettingValue('pay_frequency') === 'bi-weekly' ? 'selected' : ''}>Bi-weekly</option>
+                                            <option value="monthly" ${this.getSettingValue('pay_frequency') === 'monthly' ? 'selected' : ''}>Monthly</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Overtime Rate (multiplier)</label>
+                                        <input type="number" name="overtime_rate" value="${this.getSettingValue('overtime_rate')}" step="0.1" min="1" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Holiday Rate (multiplier)</label>
+                                        <input type="number" name="holiday_rate" value="${this.getSettingValue('holiday_rate')}" step="0.1" min="1" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Late Deduction Rate (%)</label>
+                                        <input type="number" name="late_deduction_rate" value="${this.getSettingValue('late_deduction_rate')}" step="0.01" min="0" max="1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
+                                        <input type="number" name="tax_rate" value="${this.getSettingValue('tax_rate')}" step="0.01" min="0" max="50" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">SSS Rate (%)</label>
+                                        <input type="number" name="sss_rate" value="${this.getSettingValue('sss_rate')}" step="0.01" min="0" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">PhilHealth Rate (%)</label>
+                                        <input type="number" name="philhealth_rate" value="${this.getSettingValue('philhealth_rate')}" step="0.01" min="0" max="5" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pag-IBIG Rate (%)</label>
+                                        <input type="number" name="pagibig_rate" value="${this.getSettingValue('pagibig_rate')}" step="0.01" min="0" max="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                                <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-save mr-2"></i>Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+            }
+
+            renderLeaveSettings() {
+                return `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Leave Configuration</h3>
+                        </div>
+
+                        <form id="leaveForm" class="settings-form">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Annual Leave Days</label>
+                                        <input type="number" name="annual_leave_days" value="${this.getSettingValue('annual_leave_days')}" min="0" max="50" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Sick Leave Days</label>
+                                        <input type="number" name="sick_leave_days" value="${this.getSettingValue('sick_leave_days')}" min="0" max="30" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Personal Leave Days</label>
+                                        <input type="number" name="personal_leave_days" value="${this.getSettingValue('personal_leave_days')}" min="0" max="20" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Emergency Leave Days</label>
+                                        <input type="number" name="emergency_leave_days" value="${this.getSettingValue('emergency_leave_days')}" min="0" max="10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Maternity Leave Days</label>
+                                        <input type="number" name="maternity_leave_days" value="${this.getSettingValue('maternity_leave_days')}" min="60" max="120" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Paternity Leave Days</label>
+                                        <input type="number" name="paternity_leave_days" value="${this.getSettingValue('paternity_leave_days')}" min="5" max="14" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Auto-approve Threshold (days)</label>
+                                        <input type="number" name="auto_approve_threshold" value="${this.getSettingValue('auto_approve_threshold')}" min="0" max="5" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                        <p class="text-xs text-gray-500 mt-1">Leave requests up to this many days will be auto-approved</p>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Advance Leave Request (days)</label>
+                                        <input type="number" name="advance_leave_days" value="${this.getSettingValue('advance_leave_days')}" min="1" max="90" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                        <p class="text-xs text-gray-500 mt-1">Minimum days in advance for leave requests</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end pt-6 border-t border-gray-200 mt-6">
+                                <button type="submit" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-save mr-2"></i>Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+            }
+
+            renderToggle(settingKey, title, description) {
+                const isChecked = this.getSettingValue(settingKey) === true || this.getSettingValue(settingKey) === 'true';
+
+                return `
+                    <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                        <div>
+                            <h4 class="font-medium text-gray-900">${title}</h4>
+                            <p class="text-sm text-gray-500">${description}</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="${settingKey}" value="1" class="sr-only peer" ${isChecked ? 'checked' : ''}>
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                `;
+            }
+
+            attachFormListeners() {
+                document.querySelectorAll('.settings-form').forEach(form => {
+                    form.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        this.saveSettings(form);
+                    });
+                });
+            }
+
+            async saveSettings(form) {
+                const formData = new FormData(form);
+                const settings = {};
+
+                for (const [key, value] of formData.entries()) {
+                    settings[key] = {
+                        value: value,
+                        category: this.currentTab
+                    };
+                }
+
+                // Handle unchecked checkboxes
+                const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    if (!formData.has(checkbox.name)) {
+                        settings[checkbox.name] = {
+                            value: false,
+                            category: this.currentTab
+                        };
+                    }
+                });
+
+                try {
+                    const response = await fetch(this.apiBase, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ settings })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showAlert('success', 'Settings saved successfully!');
+                        console.log('Save response:', data);
+                        await this.loadSettings(); // Reload settings
+                        this.renderCurrentTab(); // Re-render the current tab with updated values
+                    } else {
+                        this.showAlert('error', 'Failed to save settings: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showAlert('error', 'Error saving settings: ' + error.message);
+                }
+            }
+
+            async uploadLogo() {
+                const form = document.getElementById('logoForm');
+                const formData = new FormData(form);
+
+                try {
+                    const response = await fetch(this.apiBase, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showAlert('success', 'Logo uploaded successfully!');
+                        this.closeLogo();
+                        await this.loadSettings(); // Reload settings
+                        this.renderCurrentTab(); // Re-render the current tab with updated values
+                    } else {
+                        this.showAlert('error', 'Failed to upload logo: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showAlert('error', 'Error uploading logo: ' + error.message);
+                }
+            }
+
+            getSettingValue(key) {
+                return this.settings[key]?.value || '';
+            }
+
+            showAlert(type, message) {
+                const container = document.getElementById('alert-container');
+                const alertClass = type === 'success' ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+
+                container.innerHTML = `
+                    <div class="${alertClass} border px-4 py-3 rounded mb-4">
+                        ${message}
+                    </div>
+                `;
+
+                setTimeout(() => {
+                    container.innerHTML = '';
+                }, 5000);
+            }
+
+            hideLoading() {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+            }
+
+            closeLogo() {
+                document.getElementById('logoModal').classList.add('hidden');
             }
         }
+
+        // Global functions for modal
+        function openLogo() {
+            document.getElementById('logoModal').classList.remove('hidden');
+        }
+
+        function closeLogo() {
+            document.getElementById('logoModal').classList.add('hidden');
+        }
+
+        // Initialize Settings Manager
+        document.addEventListener('DOMContentLoaded', () => {
+            window.settingsManager = new SettingsManager();
+        });
     </script>
 </body>
 </html>

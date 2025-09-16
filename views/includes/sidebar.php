@@ -91,7 +91,7 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
                         $result = $stmt->fetch();
                         $userRole = $result['role_name'] ?? 'employee';
 
-                        $showSettings = in_array(strtolower($userRole), ['admin', 'hr']);
+                        $showSettings = in_array(strtolower($userRole), ['admin', 'hr', 'super admin', 'hr manager', 'hr staff']);
                     }
                 } catch (Exception $e) {
                     error_log("Settings menu error: " . $e->getMessage());
@@ -102,8 +102,8 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 
             if ($showSettings): ?>
             <li>
-                <a href="settings-new.php" class="flex items-center p-2 rounded-lg group <?php echo (in_array($currentPage, ['settings', 'settings-new'])) ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">
-                    <i class="fas fa-cog w-5 h-5 <?php echo (in_array($currentPage, ['settings', 'settings-new'])) ? 'text-white' : 'text-gray-500 group-hover:text-gray-900'; ?>"></i>
+                <a href="settings.php" class="flex items-center p-2 rounded-lg group <?php echo ($currentPage == 'settings') ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">
+                    <i class="fas fa-cog w-5 h-5 <?php echo ($currentPage == 'settings') ? 'text-white' : 'text-gray-500 group-hover:text-gray-900'; ?>"></i>
                     <span class="ml-3">Settings</span>
                 </a>
             </li>

@@ -18,21 +18,24 @@
             <!-- Search Bar -->
             <div class="hidden lg:flex items-center lg:ml-6">
                 <div class="relative">
-                    <input type="search" class="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary focus:border-primary block w-80 pl-10 p-2.5" placeholder="Search employees, payroll...">
+                    <input type="search" id="globalSearch" class="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-primary focus:border-primary block w-80 pl-10 p-2.5" placeholder="Search employees, departments..." autocomplete="off">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fas fa-search text-gray-500"></i>
+                    </div>
+                    <!-- Search Results Dropdown -->
+                    <div id="searchResults" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 hidden max-h-96 overflow-y-auto">
+                        <div id="searchContent" class="p-2"></div>
+                    </div>
+                    <!-- Loading indicator -->
+                    <div id="searchLoading" class="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 hidden p-4 text-center">
+                        <i class="fas fa-spinner fa-spin text-gray-500"></i>
+                        <span class="ml-2 text-gray-500">Searching...</span>
                     </div>
                 </div>
             </div>
 
             <!-- Right Navigation -->
             <div class="flex items-center">
-                <!-- Notifications -->
-                <button class="p-2 text-gray-500 rounded-lg hover:text-gray-900 hover:bg-gray-100 mr-2">
-                    <i class="fas fa-bell w-5 h-5"></i>
-                    <span class="absolute -mt-5 ml-2.5 px-1.5 py-0.5 text-xs font-medium text-white bg-red-500 rounded-full">3</span>
-                </button>
-
                 <!-- User Menu -->
                 <div class="flex items-center ml-3 relative">
                     <button class="flex text-sm bg-gray-800 rounded-full focus:ring-4 focus:ring-gray-300" id="user-menu-button">
