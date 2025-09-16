@@ -226,16 +226,21 @@ function handleGetLeave($pdo, $leaveId) {
                 CONCAT(e.first_name, ' ', e.last_name) as employee_name,
                 e.employee_id as emp_id,
                 e.email as employee_email,
+                d.dept_name as department_name,
+                p.position_title,
                 lt.leave_name,
                 lt.leave_code,
                 lt.is_paid,
                 lt.max_days_per_year,
-                approver.first_name as approver_first_name,
-                approver.last_name as approver_last_name
+                CONCAT(approver.first_name, ' ', approver.last_name) as approved_by_name,
+                CONCAT(rejector.first_name, ' ', rejector.last_name) as rejected_by_name
             FROM employee_leaves el
             INNER JOIN employees e ON el.employee_id = e.id
             INNER JOIN leave_types lt ON el.leave_type_id = lt.id
-            LEFT JOIN employees approver ON el.approved_by = approver.id
+            LEFT JOIN departments d ON e.department_id = d.id
+            LEFT JOIN positions p ON e.position_id = p.id
+            LEFT JOIN employees approver ON el.approved_by = approver.id AND el.status = 'Approved'
+            LEFT JOIN employees rejector ON el.approved_by = rejector.id AND el.status = 'Rejected'
             WHERE el.id = ?
         ");
         $stmt->execute([$leaveId]);
@@ -250,6 +255,18 @@ function handleGetLeave($pdo, $leaveId) {
             ]);
             return;
         }
+
+        // Get associated documents
+        $docStmt = $pdo->prepare("
+            SELECT id, file_name, original_name, file_size, file_type, uploaded_at
+            FROM leave_documents
+            WHERE leave_id = ?
+            ORDER BY uploaded_at ASC
+        ");
+        $docStmt->execute([$leaveId]);
+        $documents = $docStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $leave['documents'] = $documents;
 
         echo json_encode([
             'success' => true,
@@ -367,7 +384,20 @@ function handleGetLeaveBalance($pdo, $employeeId = null) {
 
 function handleCreateLeave($pdo) {
     try {
-        $input = json_decode(file_get_contents('php://input'), true);
+        // Ensure we start with a clean transaction state
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        // Handle both JSON and FormData inputs
+        $input = [];
+        if (isset($_POST['employee_id'])) {
+            // FormData (with file uploads)
+            $input = $_POST;
+        } else {
+            // JSON input (fallback)
+            $input = json_decode(file_get_contents('php://input'), true);
+        }
 
         // Validate required fields
         $required_fields = ['employee_id', 'leave_type_id', 'start_date', 'end_date', 'reason'];
@@ -426,12 +456,15 @@ function handleCreateLeave($pdo) {
             return;
         }
 
+        // Begin transaction
+        $pdo->beginTransaction();
+
         // Insert leave request
         $stmt = $pdo->prepare("
             INSERT INTO employee_leaves (
                 employee_id, leave_type_id, start_date, end_date,
-                total_days, reason, status, applied_date
-            ) VALUES (?, ?, ?, ?, ?, ?, 'Pending', CURDATE())
+                total_days, reason, emergency_contact, status, applied_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', CURDATE())
         ");
 
         $stmt->execute([
@@ -440,30 +473,137 @@ function handleCreateLeave($pdo) {
             $start_date,
             $end_date,
             $total_days,
-            $input['reason']
+            $input['reason'],
+            $input['emergency_contact'] ?? null
         ]);
 
         $leaveId = $pdo->lastInsertId();
+
+        // Handle file uploads
+        $uploadedFiles = [];
+        if (isset($_FILES['documents'])) {
+            // Handle both single file and multiple files
+            $files = $_FILES['documents'];
+
+            // If single file, convert to array format
+            if (!is_array($files['name'])) {
+                $files = [
+                    'name' => [$files['name']],
+                    'type' => [$files['type']],
+                    'tmp_name' => [$files['tmp_name']],
+                    'error' => [$files['error']],
+                    'size' => [$files['size']]
+                ];
+            }
+
+            // Check if we have files to process
+            if (!empty($files['name'][0])) {
+                $uploadedFiles = handleFileUploads($pdo, $leaveId, $files);
+            }
+        }
+
+        // Commit transaction
+        $pdo->commit();
 
         echo json_encode([
             'success' => true,
             'data' => [
                 'leave_id' => $leaveId,
                 'total_days' => $total_days,
-                'status' => 'Pending'
+                'status' => 'Pending',
+                'uploaded_files' => count($uploadedFiles)
             ],
             'message' => 'Leave request created successfully'
         ]);
 
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Create Leave PDO Error: " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Database error occurred: ' . $e->getMessage(),
+            'code' => 'DATABASE_ERROR'
+        ]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         error_log("Create Leave Error: " . $e->getMessage());
         http_response_code(500);
         echo json_encode([
             'success' => false,
-            'error' => 'Database error occurred',
-            'code' => 'DATABASE_ERROR'
+            'error' => 'Error: ' . $e->getMessage(),
+            'code' => 'UPLOAD_ERROR'
         ]);
     }
+}
+
+function handleFileUploads($pdo, $leaveId, $files) {
+    $uploadedFiles = [];
+    $uploadDir = __DIR__ . '/../uploads/leave_documents/';
+
+    // Ensure upload directory exists
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+
+    // Validate files array structure
+    if (!isset($files['name']) || !is_array($files['name'])) {
+        return $uploadedFiles; // No files to process
+    }
+
+    $allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/jpg', 'image/png'];
+    $maxSize = 10 * 1024 * 1024; // 10MB
+
+    for ($i = 0; $i < count($files['name']); $i++) {
+        if ($files['error'][$i] !== UPLOAD_ERR_OK) {
+            continue;
+        }
+
+        $originalName = $files['name'][$i];
+        $fileSize = $files['size'][$i];
+        $fileType = $files['type'][$i];
+        $tmpName = $files['tmp_name'][$i];
+
+        // Validate file type
+        if (!in_array($fileType, $allowedTypes)) {
+            throw new Exception("Invalid file type for {$originalName}");
+        }
+
+        // Validate file size
+        if ($fileSize > $maxSize) {
+            throw new Exception("File {$originalName} is too large");
+        }
+
+        // Generate unique filename
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $fileName = uniqid('leave_doc_') . '_' . time() . '.' . $extension;
+        $filePath = $uploadDir . $fileName;
+
+        // Move uploaded file
+        if (!move_uploaded_file($tmpName, $filePath)) {
+            throw new Exception("Failed to upload {$originalName}");
+        }
+
+        // Save file info to database
+        $stmt = $pdo->prepare("
+            INSERT INTO leave_documents (leave_id, file_name, original_name, file_size, file_type)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$leaveId, $fileName, $originalName, $fileSize, $fileType]);
+
+        $uploadedFiles[] = [
+            'id' => $pdo->lastInsertId(),
+            'file_name' => $fileName,
+            'original_name' => $originalName,
+            'file_size' => $fileSize
+        ];
+    }
+
+    return $uploadedFiles;
 }
 
 function handleApproveLeave($pdo, $leaveId) {
