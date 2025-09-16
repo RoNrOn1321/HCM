@@ -45,7 +45,7 @@ requireAuth();
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white p-8 rounded-lg shadow-lg text-center">
-            <div class="animate-spin h-12 w-12 border-4 border-primary border-t-transparent mx-auto mb-4"></div>
+            <div class="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
             <p class="text-gray-600">Loading dashboard...</p>
         </div>
     </div>
