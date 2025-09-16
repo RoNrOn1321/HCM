@@ -1,10 +1,24 @@
 <?php
 // dependents.php - API endpoint for managing employee dependents
 
-require_once '../config/database.php';
-require_once '../config/auth.php';
-require_once '../includes/ApiResponse.php';
-require_once '../includes/auth_helper.php';
+// Suppress all PHP errors and warnings for API responses
+error_reporting(0);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Start output buffering to prevent any accidental output
+ob_start();
+
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../includes/Database.php';
+require_once __DIR__ . '/../includes/ApiResponse.php';
+
+// Clean any buffered output before sending headers
+ob_clean();
 
 // Enable CORS
 header("Access-Control-Allow-Origin: *");
@@ -19,43 +33,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Set content type
 header('Content-Type: application/json');
 
-// Require authentication
-$auth = requireApiAuth();
-if (!$auth['success']) {
-    echo ApiResponse::error($auth['message'], 401);
-    exit;
+// Check authentication
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['authenticated']) || !$_SESSION['authenticated']) {
+    ApiResponse::error('Unauthorized - Please login first', 401);
 }
 
-$user = $auth['user'];
+$user_id = $_SESSION['user_id'];
 $method = $_SERVER['REQUEST_METHOD'];
 $path = $_SERVER['REQUEST_URI'];
 $path_parts = explode('/', trim($path, '/'));
 
 try {
-    $db = new Database();
+    $db = Database::getInstance();
     $conn = $db->getConnection();
 
     switch ($method) {
         case 'GET':
-            handleGet($conn, $user);
+            handleGet($conn, $user_id);
             break;
         case 'POST':
-            handlePost($conn, $user);
+            handlePost($conn, $user_id);
             break;
         case 'PUT':
-            handlePut($conn, $user);
+            handlePut($conn, $user_id);
             break;
         case 'DELETE':
-            handleDelete($conn, $user);
+            handleDelete($conn, $user_id);
             break;
         default:
-            echo ApiResponse::error('Method not allowed', 405);
+            ApiResponse::error('Method not allowed', 405);
     }
 } catch (Exception $e) {
-    echo ApiResponse::error('Internal server error: ' . $e->getMessage(), 500);
+    error_log("Dependents API Error: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine());
+    ApiResponse::error('Internal server error: ' . $e->getMessage(), 500);
 }
 
-function handleGet($conn, $user) {
+function handleGet($conn, $user_id) {
     // Get query parameters
     $employee_id = $_GET['employee_id'] ?? '';
     $dependent_id = $_GET['dependent_id'] ?? '';
@@ -64,48 +77,48 @@ function handleGet($conn, $user) {
     $is_hmo_covered = $_GET['is_hmo_covered'] ?? '';
 
     if ($dependent_id) {
-        getDependentById($conn, $user, $dependent_id);
+        getDependentById($conn, $user_id, $dependent_id);
     } elseif ($employee_id) {
-        getDependentsByEmployee($conn, $user, $employee_id, $relationship, $is_beneficiary, $is_hmo_covered);
+        getDependentsByEmployee($conn, $user_id, $employee_id, $relationship, $is_beneficiary, $is_hmo_covered);
     } else {
-        getAllDependents($conn, $user, $relationship, $is_beneficiary, $is_hmo_covered);
+        getAllDependents($conn, $user_id, $relationship, $is_beneficiary, $is_hmo_covered);
     }
 }
 
-function handlePost($conn, $user) {
+function handlePost($conn, $user_id) {
     $input = json_decode(file_get_contents('php://input'), true);
 
     if (!$input) {
-        echo ApiResponse::error('Invalid JSON data', 400);
+        ApiResponse::error('Invalid JSON data', 400);
         return;
     }
 
-    createDependent($conn, $user, $input);
+    createDependent($conn, $user_id, $input);
 }
 
-function handlePut($conn, $user) {
+function handlePut($conn, $user_id) {
     $input = json_decode(file_get_contents('php://input'), true);
 
     if (!$input || !isset($input['dependent_id'])) {
-        echo ApiResponse::error('Invalid JSON data or missing dependent_id', 400);
+        ApiResponse::error('Invalid JSON data or missing dependent_id', 400);
         return;
     }
 
-    updateDependent($conn, $user, $input);
+    updateDependent($conn, $user_id, $input);
 }
 
-function handleDelete($conn, $user) {
+function handleDelete($conn, $user_id) {
     $dependent_id = $_GET['dependent_id'] ?? '';
 
     if (!$dependent_id) {
-        echo ApiResponse::error('Dependent ID is required', 400);
+        ApiResponse::error('Dependent ID is required', 400);
         return;
     }
 
-    deleteDependent($conn, $user, $dependent_id);
+    deleteDependent($conn, $user_id, $dependent_id);
 }
 
-function getAllDependents($conn, $user, $relationship = '', $is_beneficiary = '', $is_hmo_covered = '') {
+function getAllDependents($conn, $user_id, $relationship = '', $is_beneficiary = '', $is_hmo_covered = '') {
     try {
         $where_clauses = [];
         $params = [];
@@ -161,16 +174,16 @@ function getAllDependents($conn, $user, $relationship = '', $is_beneficiary = ''
             $dependent['age'] = intval($dependent['age']);
         }
 
-        echo ApiResponse::success('Dependents retrieved successfully', [
+        ApiResponse::success([
             'total_count' => count($dependents),
             'dependents' => $dependents
-        ]);
+        ], 'Dependents retrieved successfully');
     } catch (Exception $e) {
-        echo ApiResponse::error('Error retrieving dependents: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error retrieving dependents: ' . $e->getMessage(), 500);
     }
 }
 
-function getDependentsByEmployee($conn, $user, $employee_id, $relationship = '', $is_beneficiary = '', $is_hmo_covered = '') {
+function getDependentsByEmployee($conn, $user_id, $employee_id, $relationship = '', $is_beneficiary = '', $is_hmo_covered = '') {
     try {
         // Check if employee exists
         $stmt = $conn->prepare("SELECT id, first_name, last_name FROM employees WHERE id = :employee_id");
@@ -179,7 +192,7 @@ function getDependentsByEmployee($conn, $user, $employee_id, $relationship = '',
         $employee = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$employee) {
-            echo ApiResponse::error('Employee not found', 404);
+            ApiResponse::error('Employee not found', 404);
             return;
         }
 
@@ -234,17 +247,17 @@ function getDependentsByEmployee($conn, $user, $employee_id, $relationship = '',
             $dependent['age'] = intval($dependent['age']);
         }
 
-        echo ApiResponse::success('Dependents retrieved successfully', [
+        ApiResponse::success([
             'employee' => $employee,
             'total_count' => count($dependents),
             'dependents' => $dependents
-        ]);
+        ], 'Dependents retrieved successfully');
     } catch (Exception $e) {
-        echo ApiResponse::error('Error retrieving employee dependents: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error retrieving employee dependents: ' . $e->getMessage(), 500);
     }
 }
 
-function getDependentById($conn, $user, $dependent_id) {
+function getDependentById($conn, $user_id, $dependent_id) {
     try {
         $stmt = $conn->prepare("
             SELECT
@@ -271,7 +284,7 @@ function getDependentById($conn, $user, $dependent_id) {
         $dependent = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$dependent) {
-            echo ApiResponse::error('Dependent not found', 404);
+            ApiResponse::error('Dependent not found', 404);
             return;
         }
 
@@ -279,19 +292,19 @@ function getDependentById($conn, $user, $dependent_id) {
         $dependent['is_minor'] = $dependent['age'] < 18;
         $dependent['age'] = intval($dependent['age']);
 
-        echo ApiResponse::success('Dependent retrieved successfully', $dependent);
+        ApiResponse::success($dependent, 'Dependent retrieved successfully');
     } catch (Exception $e) {
-        echo ApiResponse::error('Error retrieving dependent: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error retrieving dependent: ' . $e->getMessage(), 500);
     }
 }
 
-function createDependent($conn, $user, $input) {
+function createDependent($conn, $user_id, $input) {
     try {
         // Validate required fields
         $required_fields = ['employee_id', 'dependent_name', 'relationship'];
         foreach ($required_fields as $field) {
             if (empty($input[$field])) {
-                echo ApiResponse::error("$field is required", 400);
+                ApiResponse::error("$field is required", 400);
                 return;
             }
         }
@@ -302,21 +315,21 @@ function createDependent($conn, $user, $input) {
         $stmt->execute();
 
         if (!$stmt->fetch()) {
-            echo ApiResponse::error('Employee not found', 404);
+            ApiResponse::error('Employee not found', 404);
             return;
         }
 
         // Validate relationship
         $valid_relationships = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
         if (!in_array($input['relationship'], $valid_relationships)) {
-            echo ApiResponse::error('Invalid relationship type', 400);
+            ApiResponse::error('Invalid relationship type', 400);
             return;
         }
 
         // Validate beneficiary percentage if is_beneficiary is true
         if (!empty($input['is_beneficiary']) && $input['is_beneficiary'] == 1) {
             if (empty($input['beneficiary_percentage']) || $input['beneficiary_percentage'] <= 0 || $input['beneficiary_percentage'] > 100) {
-                echo ApiResponse::error('Valid beneficiary percentage (1-100) is required for beneficiaries', 400);
+                ApiResponse::error('Valid beneficiary percentage (1-100) is required for beneficiaries', 400);
                 return;
             }
 
@@ -331,7 +344,7 @@ function createDependent($conn, $user, $input) {
             $total_percentage = $stmt->fetch(PDO::FETCH_ASSOC)['total_percentage'] ?? 0;
 
             if (($total_percentage + $input['beneficiary_percentage']) > 100) {
-                echo ApiResponse::error('Total beneficiary percentage cannot exceed 100%', 400);
+                ApiResponse::error('Total beneficiary percentage cannot exceed 100%', 400);
                 return;
             }
         }
@@ -359,26 +372,36 @@ function createDependent($conn, $user, $input) {
             )
         ");
 
-        $stmt->bindParam(':employee_id', $input['employee_id']);
-        $stmt->bindParam(':dependent_name', $input['dependent_name']);
-        $stmt->bindParam(':relationship', $input['relationship']);
-        $stmt->bindParam(':date_of_birth', $input['date_of_birth']);
-        $stmt->bindParam(':gender', $input['gender'] ?? null);
-        $stmt->bindParam(':is_beneficiary', $input['is_beneficiary'] ?? 0);
-        $stmt->bindParam(':beneficiary_percentage', $input['beneficiary_percentage'] ?? 0);
-        $stmt->bindParam(':is_hmo_covered', $input['is_hmo_covered'] ?? 0);
+        // Prepare values for binding (bindParam requires variables, not expressions)
+        $employee_id = $input['employee_id'];
+        $dependent_name = $input['dependent_name'];
+        $relationship = $input['relationship'];
+        $date_of_birth = $input['date_of_birth'] ?? null;
+        $gender = $input['gender'] ?? null;
+        $is_beneficiary = $input['is_beneficiary'] ?? 0;
+        $beneficiary_percentage = $input['beneficiary_percentage'] ?? 0;
+        $is_hmo_covered = $input['is_hmo_covered'] ?? 0;
+
+        $stmt->bindParam(':employee_id', $employee_id);
+        $stmt->bindParam(':dependent_name', $dependent_name);
+        $stmt->bindParam(':relationship', $relationship);
+        $stmt->bindParam(':date_of_birth', $date_of_birth);
+        $stmt->bindParam(':gender', $gender);
+        $stmt->bindParam(':is_beneficiary', $is_beneficiary);
+        $stmt->bindParam(':beneficiary_percentage', $beneficiary_percentage);
+        $stmt->bindParam(':is_hmo_covered', $is_hmo_covered);
 
         $stmt->execute();
         $dependent_id = $conn->lastInsertId();
 
         // Get the created dependent
-        getDependentById($conn, $user, $dependent_id);
+        getDependentById($conn, $user_id, $dependent_id);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error creating dependent: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error creating dependent: ' . $e->getMessage(), 500);
     }
 }
 
-function updateDependent($conn, $user, $input) {
+function updateDependent($conn, $user_id, $input) {
     try {
         $dependent_id = $input['dependent_id'];
 
@@ -389,7 +412,7 @@ function updateDependent($conn, $user, $input) {
         $current_dependent = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$current_dependent) {
-            echo ApiResponse::error('Dependent not found', 404);
+            ApiResponse::error('Dependent not found', 404);
             return;
         }
 
@@ -397,7 +420,7 @@ function updateDependent($conn, $user, $input) {
         if (isset($input['relationship'])) {
             $valid_relationships = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
             if (!in_array($input['relationship'], $valid_relationships)) {
-                echo ApiResponse::error('Invalid relationship type', 400);
+                ApiResponse::error('Invalid relationship type', 400);
                 return;
             }
         }
@@ -405,7 +428,7 @@ function updateDependent($conn, $user, $input) {
         // Validate beneficiary percentage if updating beneficiary info
         if (isset($input['is_beneficiary']) && $input['is_beneficiary'] == 1 && isset($input['beneficiary_percentage'])) {
             if ($input['beneficiary_percentage'] <= 0 || $input['beneficiary_percentage'] > 100) {
-                echo ApiResponse::error('Valid beneficiary percentage (1-100) is required for beneficiaries', 400);
+                ApiResponse::error('Valid beneficiary percentage (1-100) is required for beneficiaries', 400);
                 return;
             }
 
@@ -421,7 +444,7 @@ function updateDependent($conn, $user, $input) {
             $total_percentage = $stmt->fetch(PDO::FETCH_ASSOC)['total_percentage'] ?? 0;
 
             if (($total_percentage + $input['beneficiary_percentage']) > 100) {
-                echo ApiResponse::error('Total beneficiary percentage cannot exceed 100%', 400);
+                ApiResponse::error('Total beneficiary percentage cannot exceed 100%', 400);
                 return;
             }
         }
@@ -443,7 +466,7 @@ function updateDependent($conn, $user, $input) {
         }
 
         if (empty($update_fields)) {
-            echo ApiResponse::error('No valid fields to update', 400);
+            ApiResponse::error('No valid fields to update', 400);
             return;
         }
 
@@ -457,18 +480,18 @@ function updateDependent($conn, $user, $input) {
         $stmt->execute();
 
         if ($stmt->rowCount() === 0) {
-            echo ApiResponse::error('No changes made or dependent not found', 404);
+            ApiResponse::error('No changes made or dependent not found', 404);
             return;
         }
 
         // Get the updated dependent
-        getDependentById($conn, $user, $dependent_id);
+        getDependentById($conn, $user_id, $dependent_id);
     } catch (Exception $e) {
-        echo ApiResponse::error('Error updating dependent: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error updating dependent: ' . $e->getMessage(), 500);
     }
 }
 
-function deleteDependent($conn, $user, $dependent_id) {
+function deleteDependent($conn, $user_id, $dependent_id) {
     try {
         // Check if dependent exists
         $stmt = $conn->prepare("SELECT id, dependent_name FROM employee_dependents WHERE id = :dependent_id");
@@ -477,7 +500,7 @@ function deleteDependent($conn, $user, $dependent_id) {
         $dependent = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$dependent) {
-            echo ApiResponse::error('Dependent not found', 404);
+            ApiResponse::error('Dependent not found', 404);
             return;
         }
 
@@ -486,11 +509,11 @@ function deleteDependent($conn, $user, $dependent_id) {
         $stmt->bindParam(':dependent_id', $dependent_id);
         $stmt->execute();
 
-        echo ApiResponse::success('Dependent deleted successfully', [
+        ApiResponse::success([
             'deleted_dependent' => $dependent
-        ]);
+        ], 'Dependent deleted successfully');
     } catch (Exception $e) {
-        echo ApiResponse::error('Error deleting dependent: ' . $e->getMessage(), 500);
+        ApiResponse::error('Error deleting dependent: ' . $e->getMessage(), 500);
     }
 }
 ?>

@@ -4,6 +4,11 @@ require_once __DIR__ . '/../config/auth.php';
 class ApiResponse {
 
     public static function success($data = null, $message = 'Success', $code = 200) {
+        // Clean any output buffer content
+        if (ob_get_level()) {
+            ob_clean();
+        }
+
         self::setHeaders();
         http_response_code($code);
 
@@ -19,6 +24,11 @@ class ApiResponse {
     }
 
     public static function error($message = 'Error', $code = 400, $errors = null) {
+        // Clean any output buffer content
+        if (ob_get_level()) {
+            ob_clean();
+        }
+
         self::setHeaders();
         http_response_code($code);
 

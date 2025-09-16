@@ -237,9 +237,46 @@ requireAuth();
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div class="md:col-span-2">
                                 <label class="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-                                <select id="employee-select" name="employee_id" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                                    <option value="">Select Employee...</option>
-                                </select>
+                                <div class="relative">
+                                    <div class="relative">
+                                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <i class="fas fa-search text-gray-400"></i>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            id="employee-search-input"
+                                            placeholder="Search employee by name, ID, email, or department..."
+                                            autocomplete="off"
+                                            class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                                            required
+                                        >
+                                    </div>
+                                    <input type="hidden" id="selected-employee-id" name="employee_id" required>
+
+                                    <!-- Search Results Dropdown -->
+                                    <div id="employee-search-results" class="absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto hidden">
+                                        <!-- Search results will be populated here -->
+                                    </div>
+
+                                    <!-- Selected Employee Display -->
+                                    <div id="selected-employee-display" class="hidden mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="font-medium text-gray-900" id="selected-employee-name"></p>
+                                                <p class="text-sm text-gray-600" id="selected-employee-details"></p>
+                                            </div>
+                                            <button type="button" onclick="clearEmployeeSelection()" class="text-red-600 hover:text-red-800">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Help Text -->
+                                    <div id="search-help-text" class="mt-2 text-xs text-gray-500">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Type at least 2 characters to search. Use ↑↓ arrows to navigate, Enter to select, Esc to close.
+                                    </div>
+                                </div>
                             </div>
 
                             <div>
@@ -341,33 +378,51 @@ requireAuth();
     <script>
         // API configuration
         const API_BASE_URL = '/HCM/api';
-        let authToken = localStorage.getItem('auth_token');
 
         // Global variables
         let currentDependents = [];
         let filteredDependents = [];
         let employees = [];
         let dependentToDelete = null;
+        let searchTimeout = null;
+        let selectedSearchIndex = -1;
 
         // API helper function
         async function apiCall(endpoint, options = {}) {
             const headers = {
                 'Content-Type': 'application/json',
-                ...(authToken && { 'Authorization': `Bearer ${authToken}` })
+                // No Authorization header needed - using session-based auth
             };
 
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                ...options,
-                headers: { ...headers, ...options.headers }
-            });
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    ...options,
+                    credentials: 'same-origin', // Include cookies for session
+                    headers: { ...headers, ...options.headers }
+                });
 
-            const data = await response.json();
+                // Get response text first
+                const responseText = await response.text();
 
-            if (!response.ok) {
-                throw new Error(data.message || 'API request failed');
+                // Try to parse as JSON
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error('Invalid JSON response:', responseText.substring(0, 500));
+                    throw new Error(`Server returned invalid JSON response. Response: ${responseText.substring(0, 200)}`);
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || `API request failed (${response.status})`);
+                }
+
+                return data;
+
+            } catch (error) {
+                console.error('API call error:', error);
+                throw error;
             }
-
-            return data;
         }
 
         // Initialize page
@@ -410,6 +465,213 @@ requireAuth();
 
             // Search input
             document.getElementById('employee-search').addEventListener('input', applyFilters);
+
+            // Employee search functionality
+            document.getElementById('employee-search-input').addEventListener('input', handleEmployeeSearch);
+            document.getElementById('employee-search-input').addEventListener('focus', handleEmployeeSearch);
+            document.getElementById('employee-search-input').addEventListener('keydown', handleEmployeeSearchKeydown);
+
+            // Close search results when clicking outside
+            document.addEventListener('click', function(e) {
+                const searchContainer = document.getElementById('employee-search-input').parentElement;
+                if (!searchContainer.contains(e.target)) {
+                    document.getElementById('employee-search-results').classList.add('hidden');
+                }
+            });
+        }
+
+        // Employee search functionality with debounce
+        function handleEmployeeSearch() {
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            // Set new timeout for debounced search
+            searchTimeout = setTimeout(() => {
+                try {
+                const searchTerm = document.getElementById('employee-search-input').value.toLowerCase();
+                const resultsContainer = document.getElementById('employee-search-results');
+
+                if (searchTerm.length < 2) {
+                    resultsContainer.classList.add('hidden');
+                    return;
+                }
+
+                // Safety check for employees array
+                if (!Array.isArray(employees) || employees.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div class="p-3 text-gray-500 text-sm">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            No employees loaded. Please refresh the page.
+                        </div>
+                    `;
+                    resultsContainer.classList.remove('hidden');
+                    return;
+                }
+
+                const filteredEmployees = employees.filter(employee => {
+                    // Safely handle potentially undefined properties
+                    const fullName = (employee.full_name || '').toLowerCase();
+                    const employeeId = (employee.employee_id || '').toLowerCase();
+                    const email = (employee.email || '').toLowerCase();
+                    const department = (employee.department_name || '').toLowerCase();
+
+                    return fullName.includes(searchTerm) ||
+                           employeeId.includes(searchTerm) ||
+                           email.includes(searchTerm) ||
+                           department.includes(searchTerm);
+                });
+
+                displayEmployeeSearchResults(filteredEmployees);
+
+                } catch (error) {
+                    console.error('Error in employee search:', error);
+                    const resultsContainer = document.getElementById('employee-search-results');
+                    resultsContainer.innerHTML = `
+                        <div class="p-3 text-red-500 text-sm">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>
+                            Search error. Please try again.
+                        </div>
+                    `;
+                    resultsContainer.classList.remove('hidden');
+                }
+            }, 300); // 300ms debounce
+        }
+
+        function handleEmployeeSearchKeydown(e) {
+            const resultsContainer = document.getElementById('employee-search-results');
+            const resultItems = resultsContainer.querySelectorAll('.search-result-item');
+
+            if (resultItems.length === 0) return;
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    selectedSearchIndex = Math.min(selectedSearchIndex + 1, resultItems.length - 1);
+                    updateSearchSelection(resultItems);
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    selectedSearchIndex = Math.max(selectedSearchIndex - 1, -1);
+                    updateSearchSelection(resultItems);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (selectedSearchIndex >= 0 && selectedSearchIndex < resultItems.length) {
+                        resultItems[selectedSearchIndex].click();
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    resultsContainer.classList.add('hidden');
+                    selectedSearchIndex = -1;
+                    break;
+            }
+        }
+
+        function updateSearchSelection(resultItems) {
+            resultItems.forEach((item, index) => {
+                if (index === selectedSearchIndex) {
+                    item.classList.add('bg-primary', 'text-white');
+                    item.classList.remove('hover:bg-gray-50');
+                } else {
+                    item.classList.remove('bg-primary', 'text-white');
+                    item.classList.add('hover:bg-gray-50');
+                }
+            });
+        }
+
+        function displayEmployeeSearchResults(filteredEmployees) {
+            const resultsContainer = document.getElementById('employee-search-results');
+            selectedSearchIndex = -1; // Reset selection
+
+            if (filteredEmployees.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="p-3 text-gray-500 text-sm">
+                        <i class="fas fa-search mr-2"></i>
+                        No employees found
+                    </div>
+                `;
+                resultsContainer.classList.remove('hidden');
+                return;
+            }
+
+            resultsContainer.innerHTML = filteredEmployees.map(employee => {
+                // Safely handle all employee properties
+                const fullName = employee.full_name || 'Unknown Employee';
+                const employeeId = employee.employee_id || 'N/A';
+                const email = employee.email || 'No email';
+                const department = employee.department_name || 'No Department';
+                const position = employee.position_title || 'No Position';
+                const status = employee.employment_status || 'Unknown';
+
+                const escapedName = fullName.replace(/'/g, "\\'");
+                const escapedEmail = email.replace(/'/g, "\\'");
+                const escapedDept = department.replace(/'/g, "\\'");
+                const escapedPos = position.replace(/'/g, "\\'");
+
+                return `
+                <div class="search-result-item p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                     onclick="selectEmployee(${employee.id || 0}, '${escapedName}', '${employeeId}', '${escapedEmail}', '${escapedDept}', '${escapedPos}')">
+                    <div class="flex items-center">
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-900">${fullName}</p>
+                            <p class="text-sm text-gray-600">
+                                ${employeeId} • ${department} • ${position}
+                            </p>
+                            <p class="text-xs text-gray-500">${email}</p>
+                        </div>
+                        <div class="ml-3">
+                            <span class="px-2 py-1 text-xs rounded-full ${status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                ${status}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            resultsContainer.classList.remove('hidden');
+        }
+
+        function selectEmployee(id, name, employeeId, email, department, position) {
+            // Set the hidden input value
+            document.getElementById('selected-employee-id').value = id;
+
+            // Hide search results and help text
+            document.getElementById('employee-search-results').classList.add('hidden');
+            document.getElementById('search-help-text').classList.add('hidden');
+
+            // Hide search input and show selected employee
+            document.getElementById('employee-search-input').style.display = 'none';
+            document.getElementById('selected-employee-display').classList.remove('hidden');
+
+            // Populate selected employee display
+            document.getElementById('selected-employee-name').textContent = name;
+            document.getElementById('selected-employee-details').textContent =
+                `${employeeId} • ${department} • ${position} • ${email}`;
+
+            // Reset keyboard selection
+            selectedSearchIndex = -1;
+        }
+
+        function clearEmployeeSelection() {
+            // Clear hidden input
+            document.getElementById('selected-employee-id').value = '';
+
+            // Show search input, help text and hide selected employee
+            document.getElementById('employee-search-input').style.display = 'block';
+            document.getElementById('employee-search-input').value = '';
+            document.getElementById('selected-employee-display').classList.add('hidden');
+            document.getElementById('employee-search-results').classList.add('hidden');
+            document.getElementById('search-help-text').classList.remove('hidden');
+
+            // Reset keyboard selection
+            selectedSearchIndex = -1;
+
+            // Focus on search input
+            document.getElementById('employee-search-input').focus();
         }
 
         async function loadEmployees() {
@@ -417,19 +679,22 @@ requireAuth();
                 const response = await apiCall('/employees.php');
                 employees = response.data.employees || [];
 
-                // Populate employee dropdown
-                const select = document.getElementById('employee-select');
-                select.innerHTML = '<option value="">Select Employee...</option>';
+                // Validate and clean employee data
+                employees = employees.filter(employee => employee && employee.id).map(employee => ({
+                    id: employee.id,
+                    full_name: employee.full_name || employee.first_name + ' ' + employee.last_name || 'Unknown Employee',
+                    employee_id: employee.employee_id || 'N/A',
+                    email: employee.email || '',
+                    department_name: employee.department_name || '',
+                    position_title: employee.position_title || '',
+                    employment_status: employee.employment_status || 'unknown'
+                }));
 
-                employees.forEach(employee => {
-                    const option = document.createElement('option');
-                    option.value = employee.id;
-                    option.textContent = `${employee.full_name} (${employee.employee_id})`;
-                    select.appendChild(option);
-                });
-
+                console.log(`Loaded ${employees.length} employees successfully`);
             } catch (error) {
                 console.error('Error loading employees:', error);
+                showNotification('Error loading employees. Please refresh the page.', 'error');
+                employees = []; // Ensure employees is always an array
             }
         }
 
@@ -455,9 +720,9 @@ requireAuth();
 
             filteredDependents = currentDependents.filter(dependent => {
                 const matchesSearch = !searchTerm ||
-                    dependent.employee_name.toLowerCase().includes(searchTerm) ||
-                    dependent.employee_number.toLowerCase().includes(searchTerm) ||
-                    dependent.dependent_name.toLowerCase().includes(searchTerm);
+                    (dependent.employee_name || '').toLowerCase().includes(searchTerm) ||
+                    (dependent.employee_number || '').toLowerCase().includes(searchTerm) ||
+                    (dependent.dependent_name || '').toLowerCase().includes(searchTerm);
 
                 const matchesRelationship = !relationship || dependent.relationship === relationship;
                 const matchesBeneficiary = beneficiary === '' || dependent.is_beneficiary == beneficiary;
@@ -579,6 +844,17 @@ requireAuth();
 
             const dependentId = formData.get('dependent_id');
 
+
+            // Validate required fields
+            if (!dependentData.employee_id) {
+                showNotification('Please select an employee', 'error');
+                return;
+            }
+            if (!dependentData.dependent_name) {
+                showNotification('Please enter dependent name', 'error');
+                return;
+            }
+
             try {
                 if (dependentId) {
                     // Update existing dependent
@@ -614,7 +890,20 @@ requireAuth();
 
                 // Fill form with dependent data
                 document.getElementById('dependent-id').value = dependent.id;
-                document.getElementById('employee-select').value = dependent.employee_id;
+
+                // Set selected employee for edit mode
+                const employee = employees.find(emp => emp.id == dependent.employee_id);
+                if (employee) {
+                    selectEmployee(
+                        employee.id,
+                        employee.full_name,
+                        employee.employee_id,
+                        employee.email || '',
+                        employee.department_name || '',
+                        employee.position_title || ''
+                    );
+                }
+
                 document.querySelector('input[name="dependent_name"]').value = dependent.dependent_name;
                 document.querySelector('select[name="relationship"]').value = dependent.relationship;
                 document.querySelector('input[name="date_of_birth"]').value = dependent.date_of_birth;
@@ -676,6 +965,9 @@ requireAuth();
             document.getElementById('modal-title').textContent = 'Add Dependent';
             document.getElementById('beneficiary-percentage-container').classList.add('hidden');
             document.querySelector('input[name="beneficiary_percentage"]').required = false;
+
+            // Reset employee selection
+            clearEmployeeSelection();
         }
 
         // Notification system

@@ -23,6 +23,9 @@ define('DB_TIMEOUT', 30);
 try {
     $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
     $pdo = new PDO($dsn, DB_USER, DB_PASS, DB_OPTIONS);
+
+    // For compatibility with existing code that uses $conn
+    $conn = $pdo;
 } catch (PDOException $e) {
     // Log error (in production, don't expose database details)
     error_log("Database connection failed: " . $e->getMessage());

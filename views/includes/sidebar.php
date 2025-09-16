@@ -70,12 +70,44 @@ $currentPage = basename($_SERVER['PHP_SELF'], '.php');
             </li>
 
             <!-- Settings -->
+            <?php
+            // Check if user has admin or HR permissions for settings
+            $currentUser = getCurrentUser();
+            $showSettings = false;
+
+            if ($currentUser && isset($currentUser['id'])) {
+                try {
+                    require_once __DIR__ . '/../../config/database.php';
+                    global $conn;
+
+                    if ($conn) {
+                        $stmt = $conn->prepare("
+                            SELECT r.role_name
+                            FROM users u
+                            LEFT JOIN roles r ON u.role_id = r.id
+                            WHERE u.id = ?
+                        ");
+                        $stmt->execute([$currentUser['id']]);
+                        $result = $stmt->fetch();
+                        $userRole = $result['role_name'] ?? 'employee';
+
+                        $showSettings = in_array(strtolower($userRole), ['admin', 'hr']);
+                    }
+                } catch (Exception $e) {
+                    error_log("Settings menu error: " . $e->getMessage());
+                    // Default to not showing settings on error
+                    $showSettings = false;
+                }
+            }
+
+            if ($showSettings): ?>
             <li>
-                <a href="settings.php" class="flex items-center p-2 rounded-lg group <?php echo ($currentPage == 'settings') ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">
-                    <i class="fas fa-cog w-5 h-5 <?php echo ($currentPage == 'settings') ? 'text-white' : 'text-gray-500 group-hover:text-gray-900'; ?>"></i>
+                <a href="settings-new.php" class="flex items-center p-2 rounded-lg group <?php echo (in_array($currentPage, ['settings', 'settings-new'])) ? 'text-white bg-primary' : 'text-gray-900 hover:bg-gray-100'; ?>">
+                    <i class="fas fa-cog w-5 h-5 <?php echo (in_array($currentPage, ['settings', 'settings-new'])) ? 'text-white' : 'text-gray-500 group-hover:text-gray-900'; ?>"></i>
                     <span class="ml-3">Settings</span>
                 </a>
             </li>
+            <?php endif; ?>
         </ul>
     </div>
 </aside>

@@ -141,6 +141,85 @@ function hasAnyRole($roles) {
 }
 
 /**
+ * Require API authentication (for API endpoints)
+ * Supports both JWT tokens and session-based authentication
+ */
+function requireApiAuth() {
+    session_start();
+
+    // First, try JWT token authentication
+    $headers = getallheaders();
+    $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+
+    if (!empty($authHeader) && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+        $token = $matches[1];
+
+        try {
+            require_once __DIR__ . '/JWT.php';
+            $jwt = new JWT();
+            $decoded = $jwt->decode($token);
+
+            if ($decoded && isset($decoded->user_id)) {
+                // Get user data from database
+                require_once __DIR__ . '/Database.php';
+                $db = new Database();
+                $conn = $db->getConnection();
+
+                $stmt = $conn->prepare("
+                    SELECT u.*, r.role_name as role, e.first_name, e.last_name
+                    FROM users u
+                    LEFT JOIN roles r ON u.role_id = r.id
+                    LEFT JOIN employees e ON u.id = e.user_id
+                    WHERE u.id = :user_id AND u.is_active = 1
+                ");
+                $stmt->bindParam(':user_id', $decoded->user_id);
+                $stmt->execute();
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($user) {
+                    return [
+                        'success' => true,
+                        'user' => $user
+                    ];
+                }
+            }
+        } catch (Exception $e) {
+            // JWT validation failed, try session authentication
+        }
+    }
+
+    // Fallback to session-based authentication
+    if (isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true && isset($_SESSION['user_id'])) {
+        require_once __DIR__ . '/Database.php';
+        $db = new Database();
+        $conn = $db->getConnection();
+
+        $stmt = $conn->prepare("
+            SELECT u.*, r.role_name as role, e.first_name, e.last_name
+            FROM users u
+            LEFT JOIN roles r ON u.role_id = r.id
+            LEFT JOIN employees e ON u.id = e.user_id
+            WHERE u.id = :user_id AND u.is_active = 1
+        ");
+        $stmt->bindParam(':user_id', $_SESSION['user_id']);
+        $stmt->execute();
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            return [
+                'success' => true,
+                'user' => $user
+            ];
+        }
+    }
+
+    return [
+        'success' => false,
+        'message' => 'Authorization token required'
+    ];
+}
+
+/**
  * Make authenticated API request
  */
 function makeAuthenticatedRequest($url, $method = 'GET', $data = null) {
